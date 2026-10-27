@@ -185,3 +185,27 @@ test('filterAndSortProducts respects use-case tags and expired offer removal fro
   );
   assert.equal(normalCatalogAfterExpiry.length, 2);
 });
+
+test('design playground options and summary formatter match specification', async () => {
+  const {
+    DEFAULT_THEME_ID,
+    DEFAULT_ARABIC_FONT_ID,
+    ARABIC_FONT_OPTIONS,
+    DESIGN_THEME_OPTIONS,
+    formatDesignSelectionSummary,
+  } = await import('./storeLogic');
+
+  assert.equal(DEFAULT_THEME_ID, 'hybrid');
+  assert.equal(DEFAULT_ARABIC_FONT_ID, 'tajawal');
+  assert.equal(ARABIC_FONT_OPTIONS.length, 6);
+  assert.equal(DESIGN_THEME_OPTIONS.length, 3);
+  assert.equal(
+    formatDesignSelectionSummary('contrast', 'tajawal'),
+    'Theme: Pixel Contrast | Font: Tajawal'
+  );
+  assert.equal(
+    formatDesignSelectionSummary('retail', 'cairo'),
+    'Theme: Retail Focus | Font: Cairo'
+  );
+});
+

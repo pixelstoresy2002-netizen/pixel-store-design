@@ -20,11 +20,8 @@ export const StoreFooter: React.FC<StoreFooterProps> = ({
   const topCategories = categories.filter((c) => !c.parentId);
 
   return (
-    <footer className="bg-[#111318] text-slate-300 border-t border-white/10 mt-16">
-      {/* Top Pixel Gradient Hairline */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#8E4DEB] via-[#D66C9D] to-[#EF875D]" />
-
-      <div className="max-w-[1440px] mx-auto px-4 lg:px-6 py-12">
+    <footer className="bg-[#111318] text-slate-300 border-t-2 border-[#8E4DEB] mt-16">
+      <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pb-10 border-b border-white/10">
           {/* Column 1: Brand & Identity */}
           <div className="space-y-4">

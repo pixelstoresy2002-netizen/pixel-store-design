@@ -265,3 +265,94 @@ export function filterAndSortProducts(
     }
   });
 }
+
+export const DEFAULT_THEME_ID = 'hybrid' as const;
+export const DEFAULT_ARABIC_FONT_ID = 'tajawal' as const;
+
+export const ARABIC_FONT_OPTIONS = [
+  {
+    id: 'tajawal' as const,
+    name: 'Tajawal',
+    labelAr: 'تجوال (الافتراضي)',
+    labelEn: 'Tajawal (Default)',
+    cssFamily: "'Tajawal', sans-serif",
+    previewClass: 'font-preview-tajawal',
+  },
+  {
+    id: 'readex' as const,
+    name: 'Readex Pro',
+    labelAr: 'ريدكس برو (Readex Pro)',
+    labelEn: 'Readex Pro',
+    cssFamily: "'Readex Pro', sans-serif",
+    previewClass: 'font-preview-readex',
+  },
+  {
+    id: 'ibm' as const,
+    name: 'IBM Plex Sans Arabic',
+    labelAr: 'آي بي إم بليكس (IBM Plex)',
+    labelEn: 'IBM Plex Sans Arabic',
+    cssFamily: "'IBM Plex Sans Arabic', sans-serif",
+    previewClass: 'font-preview-ibm',
+  },
+  {
+    id: 'alexandria' as const,
+    name: 'Alexandria',
+    labelAr: 'الإسكندرية (Alexandria)',
+    labelEn: 'Alexandria',
+    cssFamily: "'Alexandria', sans-serif",
+    previewClass: 'font-preview-alexandria',
+  },
+  {
+    id: 'almarai' as const,
+    name: 'Almarai',
+    labelAr: 'المراعي (Almarai)',
+    labelEn: 'Almarai',
+    cssFamily: "'Almarai', sans-serif",
+    previewClass: 'font-preview-almarai',
+  },
+  {
+    id: 'cairo' as const,
+    name: 'Cairo',
+    labelAr: 'كايرو (Cairo)',
+    labelEn: 'Cairo',
+    cssFamily: "'Cairo', sans-serif",
+    previewClass: 'font-preview-cairo',
+  },
+];
+
+export const DESIGN_THEME_OPTIONS = [
+  {
+    id: 'hybrid' as const,
+    nameEn: 'Original Hybrid',
+    nameAr: 'الهجين الأصلي (Original Hybrid)',
+    descAr: 'واجهة فاتحة متوازنة مع أقسام عروض داكنة وهوية بنفسجية واضحة',
+    descEn: 'Balanced light storefront with dark exclusive-offers contrast and purple identity',
+  },
+  {
+    id: 'contrast' as const,
+    nameEn: 'Pixel Contrast',
+    nameAr: 'تباين بيكسل (Pixel Contrast)',
+    descAr: 'ترويسة ومنطقة عروض داكنة بلمسات Pixel تقنية وتباين بصري أقوى',
+    descEn: 'Dark ink header & hero region, asymmetric promo layouts, and crisp pixel-tech accents',
+  },
+  {
+    id: 'retail' as const,
+    nameEn: 'Retail Focus',
+    nameAr: 'التركيز التجاري (Retail Focus)',
+    descAr: 'تخطيط تجاري عالي الكثافة يركز على سرعة استكشاف المنتجات والعروض',
+    descEn: 'High-efficiency commercial catalog layout with Coral promo highlights and dense discovery',
+  },
+];
+
+export function formatDesignSelectionSummary(
+  themeId: 'hybrid' | 'contrast' | 'retail',
+  fontId: 'tajawal' | 'readex' | 'ibm' | 'alexandria' | 'almarai' | 'cairo'
+): string {
+  const theme =
+    DESIGN_THEME_OPTIONS.find((t) => t.id === themeId) ??
+    DESIGN_THEME_OPTIONS[0];
+  const font =
+    ARABIC_FONT_OPTIONS.find((f) => f.id === fontId) ?? ARABIC_FONT_OPTIONS[0];
+  return `Theme: ${theme.nameEn} | Font: ${font.name}`;
+}
+

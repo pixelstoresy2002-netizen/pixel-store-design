@@ -14,6 +14,7 @@ import {
   AvailabilityStatus,
   Brand,
   Category,
+  DesignThemeId,
   FilterState,
   Language,
   Offer,
@@ -33,6 +34,7 @@ import { StorefrontView } from './StoreHeader';
 interface CatalogPageProps {
   mode: 'shop' | 'category';
   lang: Language;
+  themeId: DesignThemeId;
   products: Product[];
   categories: Category[];
   brands: Brand[];
@@ -54,8 +56,8 @@ interface CatalogPageProps {
 }
 
 export const CatalogPage: React.FC<CatalogPageProps> = ({
-  mode,
   lang,
+  themeId,
   products,
   categories,
   brands,
@@ -415,9 +417,13 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-6 py-6 space-y-6">
+    <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-6 space-y-6">
       {/* Breadcrumb Navigation & Category Header */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-5">
+      <div
+        className={`bg-white border border-slate-200/90 p-5 ${
+          themeId === 'contrast' ? 'rounded-none border-slate-300' : 'rounded-lg'
+        }`}
+      >
         <nav
           className="flex items-center flex-wrap gap-1.5 text-xs text-slate-500 mb-2"
           aria-label="Breadcrumb"
@@ -474,7 +480,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-[#111318]">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#111318]">
               {activeSubcategory
                 ? activeSubcategory.name[lang]
                 : activeParentCategory
@@ -936,7 +942,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
               {paginatedProducts.map((prod) => (
                 <ProductCard
                   key={prod.id}
@@ -946,6 +952,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                   usdToSypRate={usdToSypRate}
                   nowMs={nowMs}
                   lang={lang}
+                  themeId={themeId}
                   showCountdown={true}
                   onSelectProduct={onSelectProduct}
                   onRequestProduct={onRequestProduct}

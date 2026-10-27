@@ -25,15 +25,15 @@ export const ContactPage: React.FC<ContactPageProps> = ({
           <span className="text-xs font-bold text-[#EF875D] uppercase tracking-wider">
             {lang === 'ar' ? 'التواصل والدعم المباشر' : 'DIRECT STORE SUPPORT'}
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">
             {lang === 'ar'
               ? 'تواصل مع فريق بيكسل ستور عبر الهاتف أو واتساب'
               : 'Connect with PIXEL STORE via Phone, WhatsApp & Socials'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
             {lang === 'ar'
-              ? 'نستقبل استفساراتكم حول اللابتوبات، تجميعات الـ PC، وتوفر القطع مباشرة عبر واتساب أو الهاتف أو بزيارتنا في صالة العرض.'
-              : 'Reach our hardware specialists directly via WhatsApp, phone call, or visit our Damascus showroom.'}
+              ? 'نستقبل استفساراتكم حول اللابتوبات، تجميعات الـ PC، وتوفر القطع مباشرة عبر واتساب أو الهاتف أو بزيارتنا في المتجر.'
+              : 'Reach our hardware specialists directly via WhatsApp, phone call, or visit our store showroom.'}
           </p>
         </div>
       </div>

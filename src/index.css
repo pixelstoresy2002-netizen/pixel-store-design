@@ -7,15 +7,74 @@
     --pixel-coral: #EF875D;
     --pixel-ink: #111318;
     --pixel-base: #F4F3F7;
+
+    /* Default Arabic Font: Tajawal */
+    --font-arabic-active: 'Tajawal', sans-serif;
+    --font-latin-active: 'Plus Jakarta Sans', sans-serif;
+    --ar-line-height: 1.65;
+    --ar-letter-spacing: 0em;
+  }
+
+  /* Six Selectable Real Arabic Fonts with Optical Tuning */
+  html[data-arabic-font="tajawal"] {
+    --font-arabic-active: 'Tajawal', sans-serif;
+    --ar-line-height: 1.65;
+  }
+
+  html[data-arabic-font="readex"] {
+    --font-arabic-active: 'Readex Pro', sans-serif;
+    --ar-line-height: 1.6;
+  }
+
+  html[data-arabic-font="ibm"] {
+    --font-arabic-active: 'IBM Plex Sans Arabic', sans-serif;
+    --ar-line-height: 1.62;
+  }
+
+  html[data-arabic-font="alexandria"] {
+    --font-arabic-active: 'Alexandria', sans-serif;
+    --ar-line-height: 1.65;
+  }
+
+  html[data-arabic-font="almarai"] {
+    --font-arabic-active: 'Almarai', sans-serif;
+    --ar-line-height: 1.68;
+  }
+
+  html[data-arabic-font="cairo"] {
+    --font-arabic-active: 'Cairo', sans-serif;
+    --ar-line-height: 1.62;
   }
 
   html[dir="rtl"] body {
-    font-family: 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', sans-serif;
+    font-family: var(--font-arabic-active), var(--font-latin-active);
+    line-height: var(--ar-line-height);
   }
 
   html[dir="ltr"] body {
-    font-family: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', sans-serif;
+    font-family: var(--font-latin-active), var(--font-arabic-active);
+    line-height: 1.55;
   }
+}
+
+/* Specific font classes for the live font selector preview items */
+.font-preview-tajawal {
+  font-family: 'Tajawal', sans-serif;
+}
+.font-preview-readex {
+  font-family: 'Readex Pro', sans-serif;
+}
+.font-preview-ibm {
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+}
+.font-preview-alexandria {
+  font-family: 'Alexandria', sans-serif;
+}
+.font-preview-almarai {
+  font-family: 'Almarai', sans-serif;
+}
+.font-preview-cairo {
+  font-family: 'Cairo', sans-serif;
 }
 
 .font-mono-num {
@@ -27,35 +86,42 @@
   font-family: 'Silkscreen', 'JetBrains Mono', monospace;
 }
 
-/* Subtle Pixel Grid Pattern for Light Surfaces */
-.bg-pixel-grid-light {
-  background-image: 
-    linear-gradient(to right, rgba(142, 77, 235, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(142, 77, 235, 0.045) 1px, transparent 1px);
-  background-size: 20px 20px;
+/* Restrained, subtle pixel dot/grid patterns used selectively (not over the entire page) */
+.bg-pixel-subtle {
+  background-image: radial-gradient(rgba(142, 77, 235, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 
-/* Subtle Pixel Grid Pattern for Dark Surfaces */
 .bg-pixel-grid-dark {
-  background-image: 
-    linear-gradient(to right, rgba(214, 108, 157, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(142, 77, 235, 0.07) 1px, transparent 1px);
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Pixel Corner Notch Accent */
-.pixel-border-accent {
+/* Pixel Corner Notch Accent for Theme B (Pixel Contrast) */
+.pixel-corner-frame {
   position: relative;
 }
-.pixel-border-accent::after {
+.pixel-corner-frame::before {
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-start: 0;
   width: 6px;
   height: 6px;
   background-color: #8E4DEB;
-  opacity: 0.7;
+  pointer-events: none;
+}
+.pixel-corner-frame::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: 6px;
+  height: 6px;
+  background-color: #EF875D;
+  pointer-events: none;
 }
 
 /* Respect prefers-reduced-motion */
@@ -83,3 +149,4 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #8E4DEB;
 }
+

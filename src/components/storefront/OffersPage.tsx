@@ -148,13 +148,12 @@ export const OffersPage: React.FC<OffersPageProps> = ({
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-6 py-6 space-y-8">
+    <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-6 space-y-8">
       {/* Hero Banner for Offers & Exclusive Promotions */}
-      <div className="relative rounded-xl bg-[#111318] bg-pixel-grid-dark text-white p-6 lg:p-8 border border-slate-800 overflow-hidden">
-        <div className="absolute -top-20 -end-20 w-72 h-72 rounded-full bg-[#D66C9D]/15 blur-3xl pointer-events-none" />
+      <div className="relative rounded-lg bg-[#111318] bg-pixel-grid-dark text-white p-6 lg:p-8 border border-slate-800 overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-xs font-bold text-[#EF875D] uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#EF875D] uppercase tracking-wider">
               <Flame className="w-4 h-4 fill-[#EF875D]" />
               <span>
                 {lang === 'ar'
@@ -162,7 +161,7 @@ export const OffersPage: React.FC<OffersPageProps> = ({
                   : 'PIXEL STORE — TIME-LIMITED OFFERS & EXCLUSIVE DEALS'}
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">
               {lang === 'ar'
                 ? 'عروض حصرية بأسعار استثنائية لفترة محدودة'
                 : 'Exclusive Hardware Deals & Flash Markdowns'}

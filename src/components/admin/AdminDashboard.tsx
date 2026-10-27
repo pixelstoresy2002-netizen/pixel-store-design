@@ -22,10 +22,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  ArabicFontId,
   AvailabilityStatus,
   Brand,
   Category,
   CustomerRequest,
+  DesignThemeId,
   Language,
   Offer,
   Product,
@@ -39,6 +41,7 @@ import {
   formatUsd,
   isOfferActive,
 } from '../../utils/storeLogic';
+import { DesignPreviewControls } from '../prototype/DesignPreviewControls';
 import { CountdownBadge } from '../storefront/CountdownBadge';
 import { PixelLogo } from '../visuals/PixelLogo';
 import { ProductVisual } from '../visuals/ProductVisual';
@@ -56,6 +59,8 @@ export type AdminTab =
 
 interface AdminDashboardProps {
   lang: Language;
+  themeId: DesignThemeId;
+  fontId: ArabicFontId;
   products: Product[];
   categories: Category[];
   brands: Brand[];
@@ -65,6 +70,9 @@ interface AdminDashboardProps {
   settings: StoreSettings;
   nowMs: number;
   onToggleLanguage: () => void;
+  onSelectTheme: (themeId: DesignThemeId) => void;
+  onSelectFont: (fontId: ArabicFontId) => void;
+  onResetDesign: () => void;
   onBackToStorefront: () => void;
   onSaveProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
@@ -83,6 +91,8 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   lang,
+  themeId,
+  fontId,
   products,
   categories,
   brands,
@@ -92,6 +102,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   settings,
   nowMs,
   onToggleLanguage,
+  onSelectTheme,
+  onSelectFont,
+  onResetDesign,
   onBackToStorefront,
   onSaveProduct,
   onDeleteProduct,
@@ -390,26 +403,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             type="button"
             onClick={onBackToStorefront}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-semibold transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>
               {lang === 'ar' ? 'معاينة المتجر العام' : 'Back to Storefront'}
             </span>
           </button>
+
+          <DesignPreviewControls
+            lang={lang}
+            themeId={themeId}
+            fontId={fontId}
+            onSelectTheme={onSelectTheme}
+            onSelectFont={onSelectFont}
+            onReset={onResetDesign}
+            variant="navbar-dark"
+          />
         </div>
       </header>
 
       {/* Toast Notification */}
       {savedToast && (
-        <div className="fixed bottom-5 end-5 z-50 bg-[#111318] text-white px-4 py-3 rounded-xl border border-[#8E4DEB] shadow-xl flex items-center gap-2.5 text-xs font-bold">
+        <div className="fixed bottom-5 end-5 z-50 bg-[#111318] text-white px-4 py-3 rounded-lg border border-[#8E4DEB] shadow-xl flex items-center gap-2.5 text-xs font-semibold">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{savedToast}</span>
         </div>
       )}
 
       {/* Main Admin Workspace */}
-      <div className="flex-1 max-w-[1440px] w-full mx-auto px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="flex-1 max-w-[1600px] w-full mx-auto px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Sidebar Navigation (3 Columns) */}
         <aside className="lg:col-span-3 bg-white rounded-xl border border-slate-200/90 p-3 space-y-1">
           {navItems.map((item) => {

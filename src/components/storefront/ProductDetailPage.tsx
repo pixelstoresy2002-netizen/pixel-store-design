@@ -13,6 +13,7 @@ import {
 import {
   Brand,
   Category,
+  DesignThemeId,
   Language,
   Offer,
   Product,
@@ -38,6 +39,7 @@ interface ProductDetailPageProps {
   usdToSypRate: number;
   nowMs: number;
   lang: Language;
+  themeId: DesignThemeId;
   onNavigate: (
     view: StorefrontView,
     categoryId?: string,
@@ -58,6 +60,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   usdToSypRate,
   nowMs,
   lang,
+  themeId,
   onNavigate,
   onSelectProduct,
   onRequestProduct,
@@ -88,7 +91,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-6 py-6 space-y-8">
+    <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-6 space-y-8">
       {/* Breadcrumb & Back Link */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <nav
@@ -259,7 +262,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
           </div>
 
           {/* Product Title */}
-          <h1 className="text-xl sm:text-2xl font-extrabold text-[#111318] leading-snug">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#111318] leading-snug">
             {product.name[lang]}
           </h1>
 
@@ -459,7 +462,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
           <h2 className="text-lg font-bold text-[#111318]">
             {lang === 'ar' ? 'منتجات مشابهة قد تهمك' : 'Related Products'}
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5">
             {relatedProducts.map((rp) => (
               <ProductCard
                 key={rp.id}
@@ -469,6 +472,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 usdToSypRate={usdToSypRate}
                 nowMs={nowMs}
                 lang={lang}
+                themeId={themeId}
                 onSelectProduct={onSelectProduct}
                 onRequestProduct={onRequestProduct}
               />

@@ -1,5 +1,15 @@
 export type Language = 'ar' | 'en';
 
+export type DesignThemeId = 'hybrid' | 'contrast' | 'retail';
+
+export type ArabicFontId =
+  | 'tajawal'
+  | 'readex'
+  | 'ibm'
+  | 'alexandria'
+  | 'almarai'
+  | 'cairo';
+
 export type ProductCondition = 'NEW' | 'USED';
 
 export type AvailabilityStatus = 'IN_STOCK' | 'OUT_OF_STOCK' | 'ON_REQUEST';

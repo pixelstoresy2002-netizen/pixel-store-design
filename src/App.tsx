@@ -21,9 +21,11 @@ import {
   INITIAL_USE_CASE_TAGS,
 } from './data/mockStoreData';
 import {
+  ArabicFontId,
   Brand,
   Category,
   CustomerRequest,
+  DesignThemeId,
   FilterState,
   Language,
   Offer,
@@ -31,7 +33,13 @@ import {
   StoreSettings,
   UseCaseTag,
 } from './types/store';
-import { isOfferActive } from './utils/storeLogic';
+import {
+  ARABIC_FONT_OPTIONS,
+  DEFAULT_ARABIC_FONT_ID,
+  DEFAULT_THEME_ID,
+  DESIGN_THEME_OPTIONS,
+  isOfferActive,
+} from './utils/storeLogic';
 
 const DEFAULT_FILTERS: FilterState = {
   searchQuery: '',
@@ -49,10 +57,41 @@ const DEFAULT_FILTERS: FilterState = {
   sortBy: 'featured',
 };
 
+const STORAGE_KEY_THEME = 'pixel_store_theme';
+const STORAGE_KEY_FONT = 'pixel_store_font';
+
+function getInitialTheme(): DesignThemeId {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY_THEME);
+    if (saved && DESIGN_THEME_OPTIONS.some((t) => t.id === saved)) {
+      return saved as DesignThemeId;
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+  return DEFAULT_THEME_ID;
+}
+
+function getInitialFont(): ArabicFontId {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY_FONT);
+    if (saved && ARABIC_FONT_OPTIONS.some((f) => f.id === saved)) {
+      return saved as ArabicFontId;
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+  return DEFAULT_ARABIC_FONT_ID;
+}
+
 export default function App() {
   // Arabic is DEFAULT (right-to-left) per Section 4
   const [lang, setLang] = useState<Language>('ar');
   const [currentView, setCurrentView] = useState<StorefrontView>('home');
+
+  // Temporary Client Design Playground State (Theme + Arabic Font)
+  const [themeId, setThemeId] = useState<DesignThemeId>(getInitialTheme);
+  const [fontId, setFontId] = useState<ArabicFontId>(getInitialFont);
 
   // Centralized Store & Admin State
   const [settings, setSettings] = useState<StoreSettings>(
@@ -96,6 +135,30 @@ export default function App() {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   }, [lang]);
+
+  // Sync Theme and Arabic Font immediately on documentElement + persist in localStorage
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeId;
+    try {
+      window.localStorage.setItem(STORAGE_KEY_THEME, themeId);
+    } catch {
+      // Ignore storage write errors
+    }
+  }, [themeId]);
+
+  useEffect(() => {
+    document.documentElement.dataset.arabicFont = fontId;
+    try {
+      window.localStorage.setItem(STORAGE_KEY_FONT, fontId);
+    } catch {
+      // Ignore storage write errors
+    }
+  }, [fontId]);
+
+  const handleResetDesign = () => {
+    setThemeId(DEFAULT_THEME_ID);
+    setFontId(DEFAULT_ARABIC_FONT_ID);
+  };
 
   // Effective timestamp (adds +6 days when user tests expired-offer simulation)
   const effectiveNowMs = simulateExpiredOffers
@@ -154,7 +217,11 @@ export default function App() {
       ...prev,
       searchQuery: query,
     }));
-    if (query.trim() !== '' && currentView !== 'shop' && currentView !== 'category') {
+    if (
+      query.trim() !== '' &&
+      currentView !== 'shop' &&
+      currentView !== 'category'
+    ) {
       setCurrentView('shop');
     }
   };
@@ -252,6 +319,8 @@ export default function App() {
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="min-h-screen">
         <AdminDashboard
           lang={lang}
+          themeId={themeId}
+          fontId={fontId}
           products={products}
           categories={categories}
           brands={brands}
@@ -261,6 +330,9 @@ export default function App() {
           settings={settings}
           nowMs={effectiveNowMs}
           onToggleLanguage={handleToggleLanguage}
+          onSelectTheme={setThemeId}
+          onSelectFont={setFontId}
+          onResetDesign={handleResetDesign}
           onBackToStorefront={() => setCurrentView('home')}
           onSaveProduct={handleSaveProduct}
           onDeleteProduct={handleDeleteProduct}
@@ -277,13 +349,23 @@ export default function App() {
     );
   }
 
+  // Page surface background adapts subtly to active theme
+  const pageSurfaceClass =
+    themeId === 'contrast'
+      ? 'bg-[#ECEAF2] bg-pixel-subtle text-[#111318]'
+      : themeId === 'retail'
+      ? 'bg-[#F8FAFC] text-[#111318]'
+      : 'bg-[#F4F3F7] bg-pixel-subtle text-[#111318]';
+
   return (
     <div
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
-      className="min-h-screen flex flex-col bg-[#F4F3F7] bg-pixel-grid-light text-[#111318]"
+      className={`min-h-screen flex flex-col ${pageSurfaceClass}`}
     >
       <StoreHeader
         lang={lang}
+        themeId={themeId}
+        fontId={fontId}
         settings={settings}
         categories={categories}
         currentView={currentView}
@@ -292,6 +374,9 @@ export default function App() {
         activeOffersCount={activeOffersCount}
         pendingRequestsCount={pendingRequestsCount}
         onToggleLanguage={handleToggleLanguage}
+        onSelectTheme={setThemeId}
+        onSelectFont={setFontId}
+        onResetDesign={handleResetDesign}
         onNavigate={handleNavigate}
         onSearchSubmit={handleSearchSubmit}
       />
@@ -300,6 +385,7 @@ export default function App() {
         {currentView === 'home' && (
           <HomePage
             lang={lang}
+            themeId={themeId}
             products={products}
             categories={categories}
             brands={brands}
@@ -316,6 +402,7 @@ export default function App() {
           <CatalogPage
             mode={currentView}
             lang={lang}
+            themeId={themeId}
             products={products}
             categories={categories}
             brands={brands}
@@ -345,6 +432,7 @@ export default function App() {
             usdToSypRate={settings.usdToSypRate}
             nowMs={effectiveNowMs}
             lang={lang}
+            themeId={themeId}
             onNavigate={handleNavigate}
             onSelectProduct={handleSelectProduct}
             onRequestProduct={(prod) => setRequestModalProduct(prod)}
