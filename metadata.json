@@ -1,0 +1,6 @@
+{
+  "name": "Pixel Store — Electronics & Gaming Hardware",
+  "description": "Interactive bilingual (Arabic RTL / English LTR) e-commerce storefront and admin design prototype for Pixel Store electronics, laptops, custom PC builds, and gaming hardware.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
