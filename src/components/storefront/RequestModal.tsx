@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { CheckCircle2, MessageCircle, X } from 'lucide-react';
 import { Language, Offer, Product } from '../../types/store';
@@ -97,8 +99,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {lang === 'ar'
-                ? 'سيتواصل معك فريق المبيعات مباشرة عبر واتساب لتأكيد الطلب'
-                : 'Our team will contact you directly on WhatsApp to confirm availability'}
+                ? 'أرسل طلبك وسيتواصل معك المتجر عبر واتساب.'
+                : 'Submit your request and the store will contact you via WhatsApp.'}
             </p>
           </div>
           <button
@@ -151,8 +153,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({
               </h3>
               <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
                 {lang === 'ar'
-                  ? `شكراً لك ${customerName}. تم حفظ طلبك في لوحة الإدارة وسيتواصل معك فريق بيكسل ستور عبر الرقم (${phoneNumber}) على واتساب خلال دقائق.`
-                  : `Thank you, ${customerName}. Your inquiry is logged in our store system and our team will reach out via WhatsApp at (${phoneNumber}) shortly.`}
+                  ? `شكراً لك ${customerName}. تم استلام طلبك وسيتواصل معك المتجر عبر الرقم (${phoneNumber}) على واتساب.`
+                  : `Thank you, ${customerName}. Your request has been submitted and the store will contact you via WhatsApp at (${phoneNumber}).`}
               </p>
             </div>
             <div className="pt-2 flex items-center justify-center gap-3">
@@ -214,7 +216,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
                 required
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+963 944 000 000"
+                placeholder="+963 9XX XXX XXX"
                 className="w-full px-3.5 py-2.5 text-sm font-mono-num rounded-lg border border-slate-300 bg-white text-[#111318] placeholder:text-slate-400 focus:outline-none focus:border-[#8E4DEB] focus:ring-2 focus:ring-[#8E4DEB]/15 text-start"
               />
             </div>

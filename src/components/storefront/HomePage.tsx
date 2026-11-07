@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,9 +15,7 @@ import {
   MessageCircle,
   Monitor,
   Mouse,
-  Phone,
   ShieldCheck,
-  Sparkles,
   Wrench,
 } from 'lucide-react';
 import {
@@ -30,12 +30,20 @@ import {
 import {
   formatSyp,
   formatUsd,
+  getNextHeroSlideIndex,
+  getProductGalleryImages,
+  HERO_AUTOPLAY_INTERVAL_MS,
   isOfferActive,
   resolveProductPricing,
 } from '../../utils/storeLogic';
 import { ProductVisual } from '../visuals/ProductVisual';
+import { ContactIconsBar } from './ContactIconsBar';
 import { CountdownBadge } from './CountdownBadge';
 import { ProductCard } from './ProductCard';
+import {
+  ProductGalleryStage,
+  useProductHoverGallery,
+} from './ProductGalleryHover';
 import { StorefrontView } from './StoreHeader';
 
 interface HomePageProps {
@@ -70,6 +78,10 @@ export const HomePage: React.FC<HomePageProps> = ({
   onRequestProduct,
 }) => {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [isHeroHovered, setIsHeroHovered] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+
   const [bestSellerFilter, setBestSellerFilter] = useState<
     'ALL' | 'laptops' | 'accessories' | 'pc-components'
   >('ALL');
@@ -146,9 +158,124 @@ export const HomePage: React.FC<HomePageProps> = ({
       targetCategory: 'accessories',
       accent: '#EF875D',
     },
+    {
+      id: 'slide-4',
+      kicker: {
+        ar: 'مختبر التجميع الاحترافي في بيكسل ستور',
+        en: 'PIXEL STORE CUSTOM PC BUILD LAB',
+      },
+      title: {
+        ar: 'تجميعات PC جاهزة للألعاب التنافسية والمونتاج الهندسي',
+        en: 'Ready-to-Run Gaming & Workstation PC Builds',
+      },
+      subtitle: {
+        ar: 'تنظيم كابلات احترافي، ضبط BIOS وترددات الرام، مع اختبار ضغط حراري شامل قبل التسليم.',
+        en: 'Precision cable management, XMP/EXPO tuning, and full thermal stress testing on every custom build.',
+      },
+      ctaLabel: {
+        ar: 'استعرض تجميعات PC',
+        en: 'Explore PC Builds',
+      },
+      visualKey: 'build-nebula-front',
+      targetView: 'category' as StorefrontView,
+      targetCategory: 'pc-builds',
+      accent: '#8E4DEB',
+    },
+    {
+      id: 'slide-5',
+      kicker: {
+        ar: 'الصوتيات الاحترافية وحلول التبريد المتقدمة',
+        en: 'PRO AUDIO & THERMAL COOLING SOLUTIONS',
+      },
+      title: {
+        ar: 'سماعات ألعاب محيطية وخدمات صيانة وتبريد احترافية',
+        en: 'Studio IEMs, Gaming Headsets & Thermal Servicing',
+      },
+      subtitle: {
+        ar: 'تجربة صوتية دقيقة للألعاب التنافسية، مع قسم متخصص لحلول التبريد وخفض حرارة اللابتوبات.',
+        en: 'Pinpoint positional audio gear alongside our specialized laptop & GPU thermal servicing lab.',
+      },
+      ctaLabel: {
+        ar: 'تصفح الصوتيات والسماعات',
+        en: 'Explore Audio & Headsets',
+      },
+      visualKey: 'audio-iem-front',
+      targetView: 'category' as StorefrontView,
+      targetCategory: 'audio',
+      accent: '#D66C9D',
+    },
   ];
 
-  const currentSlide = heroSlides[activeSlide];
+  // Respect prefers-reduced-motion media query
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener?.('change', handler);
+    return () => mq.removeEventListener?.('change', handler);
+  }, []);
+
+  // Auto-advance hero slider every 5.5s, pausing on hover and resetting after manual navigation
+  useEffect(() => {
+    if (isHeroHovered || prefersReducedMotion || heroSlides.length <= 1) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setActiveSlide((prev) =>
+        getNextHeroSlideIndex(prev, heroSlides.length, 'next')
+      );
+    }, HERO_AUTOPLAY_INTERVAL_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [activeSlide, isHeroHovered, prefersReducedMotion, heroSlides.length]);
+
+  const goToPrevSlide = () => {
+    setActiveSlide((prev) =>
+      getNextHeroSlideIndex(prev, heroSlides.length, 'prev')
+    );
+  };
+
+  const goToNextSlide = () => {
+    setActiveSlide((prev) =>
+      getNextHeroSlideIndex(prev, heroSlides.length, 'next')
+    );
+  };
+
+  const handleHeroKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (lang === 'ar') {
+        goToNextSlide();
+      } else {
+        goToPrevSlide();
+      }
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (lang === 'ar') {
+        goToPrevSlide();
+      } else {
+        goToNextSlide();
+      }
+    }
+  };
+
+  const handleHeroTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartXRef.current = e.touches[0]?.clientX ?? null;
+  };
+
+  const handleHeroTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartXRef.current === null) return;
+    const endX = e.changedTouches[0]?.clientX ?? touchStartXRef.current;
+    const deltaX = endX - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(deltaX) < 40) return;
+    if (deltaX > 0) {
+      goToPrevSlide();
+    } else {
+      goToNextSlide();
+    }
+  };
 
   // Active offers and their products
   const activeOffers = offers.filter((o) => isOfferActive(o, nowMs));
@@ -158,6 +285,15 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const spotlightOfferProduct = offerProducts[0];
   const secondaryOfferProducts = offerProducts.slice(1, 5);
+  const spotlightGalleryImages = spotlightOfferProduct
+    ? getProductGalleryImages(spotlightOfferProduct)
+    : [];
+  const {
+    activeIndex: spotlightActiveIdx,
+    isHovering: spotlightHovering,
+    handleMouseEnter: handleSpotlightEnter,
+    handleMouseLeave: handleSpotlightLeave,
+  } = useProductHoverGallery(spotlightGalleryImages);
 
   // Best Sellers (Admin-controlled manual flag)
   const allBestSellers = products.filter((p) => p.isBestSeller);
@@ -269,15 +405,31 @@ export const HomePage: React.FC<HomePageProps> = ({
     : null;
 
   return (
-    <div className="space-y-9 pb-10">
-      {/* SECTION 1: Hero & Supporting Merchandising (Varies Meaningfully by Theme) */}
-      <section className="max-w-[1600px] mx-auto px-4 lg:px-6 pt-5">
+    <div className="space-y-6 pb-6">
+      {/* SECTION 1: Hero & Supporting Merchandising (5-Slide Autoplay & Hover-Pause Carousel) */}
+      <section className="max-w-[1600px] mx-auto px-4 lg:px-6 pt-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           {/* Primary Hero Showcase (8 Cols in Hybrid/Contrast, 7 Cols in Retail) */}
           <div
+            data-testid="hero-carousel"
+            data-active-slide={activeSlide}
+            data-paused={isHeroHovered ? 'true' : 'false'}
+            tabIndex={0}
+            role="region"
+            aria-roledescription="carousel"
+            aria-label={
+              lang === 'ar'
+                ? 'العروض والأقسام المميزة في بيكسل ستور'
+                : 'Pixel Store Featured Hardware Carousel'
+            }
+            onMouseEnter={() => setIsHeroHovered(true)}
+            onMouseLeave={() => setIsHeroHovered(false)}
+            onKeyDown={handleHeroKeyDown}
+            onTouchStart={handleHeroTouchStart}
+            onTouchEnd={handleHeroTouchEnd}
             className={`${
               themeId === 'retail' ? 'lg:col-span-7' : 'lg:col-span-8'
-            } relative overflow-hidden flex flex-col justify-between min-h-[330px] lg:min-h-[370px] ${
+            } relative overflow-hidden flex flex-col justify-between min-h-[310px] lg:min-h-[345px] focus-visible:outline-2 focus-visible:outline-[#8E4DEB] ${
               themeId === 'contrast'
                 ? 'rounded-none bg-[#0D0F14] bg-pixel-grid-dark text-white border-2 border-[#8E4DEB]/60 pixel-corner-frame'
                 : themeId === 'retail'
@@ -285,96 +437,119 @@ export const HomePage: React.FC<HomePageProps> = ({
                 : 'rounded-lg bg-[#111318] bg-pixel-grid-dark text-white border border-slate-800'
             }`}
           >
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-6 p-6 lg:p-8 items-center flex-1">
-              {/* Slide Copy */}
-              <div className="md:col-span-7 space-y-3.5">
-                <div
-                  className={`inline-flex items-center gap-2 text-xs font-semibold tracking-wider uppercase ${
-                    themeId === 'retail' ? 'text-[#8E4DEB]' : 'text-[#EF875D]'
-                  }`}
-                >
-                  <span className="w-2 h-2 bg-[#8E4DEB]" />
-                  <span>{currentSlide.kicker[lang]}</span>
-                </div>
-
-                <h1
-                  className={`text-2xl sm:text-3xl lg:text-[32px] font-bold leading-tight ${
-                    themeId === 'retail' ? 'text-[#111318]' : 'text-white'
-                  }`}
-                >
-                  {currentSlide.title[lang]}
-                </h1>
-
-                <p
-                  className={`text-xs sm:text-sm leading-relaxed max-w-xl ${
-                    themeId === 'retail' ? 'text-slate-600' : 'text-slate-300'
-                  }`}
-                >
-                  {currentSlide.subtitle[lang]}
-                </p>
-
-                <div className="pt-2 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onNavigate(
-                        currentSlide.targetView,
-                        currentSlide.targetCategory
-                      )
-                    }
-                    className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-semibold transition-colors ${
-                      themeId === 'contrast'
-                        ? 'rounded-none bg-[#8E4DEB] hover:bg-[#7B39D8] text-white'
-                        : 'rounded-md bg-[#8E4DEB] hover:bg-[#7B39D8] text-white'
+            {/* Stacked 5-Slide Stage with Smooth 1050ms Crossfade + Subtle Motion */}
+            <div className="relative z-10 grid grid-cols-1 flex-1 items-center">
+              {heroSlides.map((slide, idx) => {
+                const isActive = activeSlide === idx;
+                return (
+                  <div
+                    key={slide.id}
+                    data-testid={`hero-slide-panel-${idx}`}
+                    aria-hidden={!isActive}
+                    inert={!isActive ? true : undefined}
+                    className={`col-start-1 row-start-1 grid grid-cols-1 md:grid-cols-12 gap-5 p-5 lg:p-7 items-center ${
+                      prefersReducedMotion
+                        ? isActive
+                          ? 'opacity-100 z-10 pointer-events-auto'
+                          : 'opacity-0 z-0 pointer-events-none'
+                        : `transition-[opacity,transform] duration-[1050ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                            isActive
+                              ? 'opacity-100 translate-y-0 scale-100 z-10 pointer-events-auto'
+                              : 'opacity-0 translate-y-1.5 scale-[0.985] z-0 pointer-events-none'
+                          }`
                     }`}
                   >
-                    <span>{currentSlide.ctaLabel[lang]}</span>
-                    <DirectionalArrow className="w-4 h-4" />
-                  </button>
+                    {/* Slide Copy */}
+                    <div className="md:col-span-7 space-y-3">
+                      <div
+                        className={`inline-flex items-center gap-2 text-xs font-semibold tracking-wider uppercase ${
+                          themeId === 'retail' ? 'text-[#8E4DEB]' : 'text-[#EF875D]'
+                        }`}
+                      >
+                        <span className="w-2 h-2 bg-[#8E4DEB]" />
+                        <span>{slide.kicker[lang]}</span>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('offers')}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium border transition-colors ${
-                      themeId === 'contrast'
-                        ? 'rounded-none bg-white/5 hover:bg-white/15 text-white border-white/20'
-                        : themeId === 'retail'
-                        ? 'rounded-md bg-[#F4F3F7] hover:bg-slate-200 text-[#111318] border-slate-300'
-                        : 'rounded-md bg-white/10 hover:bg-white/15 text-white border-white/15'
-                    }`}
-                  >
-                    <Flame className="w-4 h-4 text-[#EF875D]" />
-                    <span>
-                      {lang === 'ar' ? 'تصفح العروض' : 'View Active Deals'}
-                    </span>
-                  </button>
-                </div>
-              </div>
+                      <h1
+                        className={`text-xl sm:text-2xl lg:text-[28px] font-bold leading-tight ${
+                          themeId === 'retail' ? 'text-[#111318]' : 'text-white'
+                        }`}
+                      >
+                        {slide.title[lang]}
+                      </h1>
 
-              {/* Slide Hardware Visual */}
-              <div className="md:col-span-5 flex items-center justify-center">
-                <div
-                  className={`w-full max-w-[280px] aspect-[4/3] overflow-hidden border p-2 ${
-                    themeId === 'contrast'
-                      ? 'rounded-none border-white/20 bg-[#161922]'
-                      : themeId === 'retail'
-                      ? 'rounded-md border-slate-200 bg-[#F8F7FA]'
-                      : 'rounded-lg border-white/15 bg-[#181B26]'
-                  }`}
-                >
-                  <div className="w-full h-full overflow-hidden">
-                    <ProductVisual
-                      visualKey={currentSlide.visualKey}
-                      alt={currentSlide.title[lang]}
-                    />
+                      <p
+                        className={`text-xs sm:text-sm leading-relaxed max-w-xl ${
+                          themeId === 'retail' ? 'text-slate-600' : 'text-slate-300'
+                        }`}
+                      >
+                        {slide.subtitle[lang]}
+                      </p>
+
+                      <div className="pt-1.5 flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onNavigate(slide.targetView, slide.targetCategory)
+                          }
+                          className={`inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold transition-colors ${
+                            themeId === 'contrast'
+                              ? 'rounded-none bg-[#8E4DEB] hover:bg-[#7B39D8] text-white'
+                              : 'rounded-md bg-[#8E4DEB] hover:bg-[#7B39D8] text-white'
+                          }`}
+                        >
+                          <span>{slide.ctaLabel[lang]}</span>
+                          <DirectionalArrow className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onNavigate('offers')}
+                          className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium border transition-colors ${
+                            themeId === 'contrast'
+                              ? 'rounded-none bg-white/5 hover:bg-white/15 text-white border-white/20'
+                              : themeId === 'retail'
+                              ? 'rounded-md bg-[#F4F3F7] hover:bg-slate-200 text-[#111318] border-slate-300'
+                              : 'rounded-md bg-white/10 hover:bg-white/15 text-white border-white/15'
+                          }`}
+                        >
+                          <Flame className="w-4 h-4 text-[#EF875D]" />
+                          <span>
+                            {lang === 'ar' ? 'تصفح العروض' : 'View Active Deals'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Slide Hardware Visual */}
+                    <div className="md:col-span-5 flex items-center justify-center">
+                      <div
+                        className={`w-full max-w-[260px] aspect-[4/3] overflow-hidden border p-2 transition-transform duration-[1050ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                          isActive ? 'scale-100' : 'scale-95'
+                        } ${
+                          themeId === 'contrast'
+                            ? 'rounded-none border-white/20 bg-[#161922]'
+                            : themeId === 'retail'
+                            ? 'rounded-md border-slate-200 bg-[#F8F7FA]'
+                            : 'rounded-lg border-white/15 bg-[#181B26]'
+                        }`}
+                      >
+                        <div className="w-full h-full overflow-hidden">
+                          <ProductVisual
+                            visualKey={slide.visualKey}
+                            alt={slide.title[lang]}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
 
-            {/* Slider Controls Bar */}
+            {/* Slider Controls Bar (5 Slide Indicators + Prev/Next) */}
             <div
-              className={`relative z-10 px-6 py-2.5 border-t flex items-center justify-between ${
+              className={`relative z-10 px-5 lg:px-7 py-2.5 border-t flex items-center justify-between ${
                 themeId === 'retail'
                   ? 'bg-[#F8F7FA] border-slate-200 text-[#111318]'
                   : 'bg-black/35 border-white/10 text-white'
@@ -385,8 +560,10 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <button
                     key={s.id}
                     type="button"
+                    data-testid={`hero-slide-dot-${idx}`}
                     onClick={() => setActiveSlide(idx)}
-                    aria-label={`Slide ${idx + 1}`}
+                    aria-label={`Slide ${idx + 1}: ${s.kicker[lang]}`}
+                    aria-current={activeSlide === idx ? 'true' : undefined}
                     className={`h-2 transition-all ${
                       activeSlide === idx
                         ? 'w-7 bg-[#8E4DEB]'
@@ -396,17 +573,16 @@ export const HomePage: React.FC<HomePageProps> = ({
                     }`}
                   />
                 ))}
+                <span className="ms-1.5 text-[11px] font-mono-num text-slate-400">
+                  {activeSlide + 1} / {heroSlides.length}
+                </span>
               </div>
 
               <div className="flex items-center gap-1.5" dir="ltr">
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveSlide(
-                      (prev) =>
-                        (prev - 1 + heroSlides.length) % heroSlides.length
-                    )
-                  }
+                  data-testid="hero-prev-btn"
+                  onClick={goToPrevSlide}
                   aria-label="Previous slide"
                   className={`p-1.5 transition-colors ${
                     themeId === 'retail'
@@ -418,9 +594,8 @@ export const HomePage: React.FC<HomePageProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveSlide((prev) => (prev + 1) % heroSlides.length)
-                  }
+                  data-testid="hero-next-btn"
+                  onClick={goToNextSlide}
                   aria-label="Next slide"
                   className={`p-1.5 transition-colors ${
                     themeId === 'retail'
@@ -750,18 +925,19 @@ export const HomePage: React.FC<HomePageProps> = ({
         )}
       </section>
 
-      {/* SECTION 3: Exclusive Offers — Purposeful Split Promotional Composition (Featured Deal + 4-Card Grid) */}
+      {/* SECTION 3: Exclusive Offers — Non-Stretching Split Composition (5-Col Featured Deal + 7-Col Compact 2x2 Secondary Deal Grid) */}
       <section className="max-w-[1600px] mx-auto px-4 lg:px-6">
         <div
-          className={`bg-[#111318] text-white p-5 lg:p-6 border border-slate-800 relative overflow-hidden ${
+          data-testid="exclusive-offers-section"
+          className={`bg-[#111318] text-white p-4 sm:p-5 border border-slate-800 relative overflow-hidden ${
             themeId === 'contrast'
               ? 'rounded-none border-2 border-[#D66C9D]/60 bg-pixel-grid-dark'
               : 'rounded-lg'
           }`}
         >
           {/* Section Header Bar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 mb-5 border-b border-white/10">
-            <div className="space-y-1">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 mb-4 border-b border-white/10">
+            <div className="space-y-0.5">
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#EF875D] uppercase tracking-wider">
                 <Flame className="w-4 h-4 fill-[#EF875D]" />
                 <span>
@@ -770,18 +946,20 @@ export const HomePage: React.FC<HomePageProps> = ({
                     : 'LIMITED-TIME OFFERS — AUTO-REVERTS WHEN TIMER ENDS'}
                 </span>
               </div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-lg sm:text-xl font-bold text-white">
                 {lang === 'ar'
                   ? 'العروض الحصرية والتخفيضات الفورية'
                   : 'Exclusive Offers & Flash Markdowns'}
               </h2>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               {activeOffers[0] && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-300">
-                    {lang === 'ar' ? 'أقرب عرض ينتهي خلال:' : 'Next offer ends in:'}
+                    {lang === 'ar'
+                      ? 'أقرب عرض ينتهي خلال:'
+                      : 'Next offer ends in:'}
                   </span>
                   <CountdownBadge
                     endTimeIso={activeOffers[0].endTime}
@@ -795,7 +973,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('offers')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xs bg-[#D66C9D] hover:bg-[#c5598b] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xs bg-[#D66C9D] hover:bg-[#c5598b] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
               >
                 <span>
                   {lang === 'ar'
@@ -808,92 +986,117 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
 
           {offerProducts.length === 0 ? (
-            <div className="py-8 text-center text-slate-400 text-sm">
+            <div className="py-6 text-center text-slate-400 text-sm">
               {lang === 'ar'
                 ? 'انتهت جميع العروض المؤقتة وعادت المنتجات لأسعارها الأساسية في المتجر.'
                 : 'All time-limited offers have expired and products have returned to their base USD pricing.'}
             </div>
           ) : (
-            /* Asymmetric Split: 4-Col Featured Offer Spotlight + 8-Col 4-Card Offer Grid */
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            /* Non-Stretching Split (items-start): 5-Col Featured Offer Spotlight + 7-Col 2x2 Compact Secondary Offer Grid */
+            <div
+              data-testid="exclusive-offers-layout-grid"
+              className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start"
+            >
               {spotlightOfferProduct && spotlightPricing && (
-                <div className="lg:col-span-4 bg-[#191C26] border border-[#D66C9D]/40 p-5 flex flex-col justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 bg-[#D66C9D] text-white text-[11px] font-semibold">
-                        {lang === 'ar' ? 'عرض القمة المختار' : 'FEATURED FLASH DEAL'}
-                      </span>
-                      <span className="font-mono-num text-xs font-bold text-[#EF875D]">
-                        {lang === 'ar'
-                          ? `وفر $${spotlightPricing.originalUsd - spotlightPricing.effectiveUsd}`
-                          : `SAVE $${spotlightPricing.originalUsd - spotlightPricing.effectiveUsd}`}
-                      </span>
+                <div
+                  data-testid="featured-offer-card"
+                  onMouseEnter={handleSpotlightEnter}
+                  onMouseLeave={handleSpotlightLeave}
+                  className="lg:col-span-5 bg-[#191C26] border border-[#D66C9D]/45 p-4 sm:p-5 space-y-3.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 bg-[#D66C9D] text-white text-[11px] font-semibold">
+                      {lang === 'ar' ? 'عرض القمة المختار' : 'FEATURED FLASH DEAL'}
+                    </span>
+                    <span className="font-mono-num text-xs font-bold text-[#EF875D]">
+                      {lang === 'ar'
+                        ? `وفر $${
+                            spotlightPricing.originalUsd -
+                            spotlightPricing.effectiveUsd
+                          }`
+                        : `SAVE $${
+                            spotlightPricing.originalUsd -
+                            spotlightPricing.effectiveUsd
+                          }`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-center">
+                    <button
+                      type="button"
+                      onClick={() => onSelectProduct(spotlightOfferProduct.id)}
+                      className="sm:col-span-5 relative aspect-[4/3] bg-[#111318] border border-white/10 overflow-hidden block"
+                    >
+                      <ProductGalleryStage
+                        images={spotlightGalleryImages}
+                        activeIndex={spotlightActiveIdx}
+                        isHovering={spotlightHovering}
+                        productName={spotlightOfferProduct.name[lang]}
+                        showCounterBadge={true}
+                      />
+                    </button>
+
+                    <div className="sm:col-span-7 space-y-2">
+                      <h3 className="text-base font-bold text-white leading-snug">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelectProduct(spotlightOfferProduct.id)
+                          }
+                          className="text-start hover:text-[#EF875D] transition-colors"
+                        >
+                          {spotlightOfferProduct.name[lang]}
+                        </button>
+                      </h3>
+
+                      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                        {spotlightOfferProduct.description[lang]}
+                      </p>
+
+                      {spotlightPricing.activeOffer && (
+                        <div className="pt-0.5">
+                          <CountdownBadge
+                            endTimeIso={spotlightPricing.activeOffer.endTime}
+                            nowMs={nowMs}
+                            lang={lang}
+                            variant="prominent"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/10 flex items-end justify-between gap-3">
+                    <div>
+                      <div className="flex items-baseline gap-2" dir="ltr">
+                        <span className="font-mono-num text-2xl font-bold text-white">
+                          {formatUsd(spotlightPricing.effectiveUsd)}
+                        </span>
+                        <span className="font-mono-num text-xs text-slate-400 line-through">
+                          {formatUsd(spotlightPricing.originalUsd)}
+                        </span>
+                      </div>
+                      <div className="font-mono-num text-xs text-[#EF875D] mt-0.5">
+                        {formatSyp(spotlightPricing.effectiveSyp, lang)}
+                      </div>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => onSelectProduct(spotlightOfferProduct.id)}
-                      className="w-full aspect-[16/10] bg-[#111318] border border-white/10 overflow-hidden block"
+                      onClick={() => onRequestProduct(spotlightOfferProduct)}
+                      className="px-4 py-2 bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
                     >
-                      <ProductVisual
-                        visualKey={spotlightOfferProduct.primaryImage}
-                        alt={spotlightOfferProduct.name[lang]}
-                      />
+                      {lang === 'ar' ? 'اطلب العرض الآن' : 'Request Deal'}
                     </button>
-
-                    <h3 className="text-base font-bold text-white leading-snug">
-                      <button
-                        type="button"
-                        onClick={() => onSelectProduct(spotlightOfferProduct.id)}
-                        className="text-start hover:text-[#EF875D] transition-colors"
-                      >
-                        {spotlightOfferProduct.name[lang]}
-                      </button>
-                    </h3>
-
-                    <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                      {spotlightOfferProduct.description[lang]}
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-white/10 space-y-3">
-                    {spotlightPricing.activeOffer && (
-                      <CountdownBadge
-                        endTimeIso={spotlightPricing.activeOffer.endTime}
-                        nowMs={nowMs}
-                        lang={lang}
-                        variant="prominent"
-                      />
-                    )}
-
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <div className="flex items-baseline gap-2" dir="ltr">
-                          <span className="font-mono-num text-2xl font-bold text-white">
-                            {formatUsd(spotlightPricing.effectiveUsd)}
-                          </span>
-                          <span className="font-mono-num text-xs text-slate-400 line-through">
-                            {formatUsd(spotlightPricing.originalUsd)}
-                          </span>
-                        </div>
-                        <div className="font-mono-num text-xs text-[#EF875D] mt-0.5">
-                          {formatSyp(spotlightPricing.effectiveSyp, lang)}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => onRequestProduct(spotlightOfferProduct)}
-                        className="px-4 py-2 bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
-                      >
-                        {lang === 'ar' ? 'اطلب العرض الآن' : 'Request Deal'}
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
 
-              <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+              {/* 2x2 Compact Secondary Offer Cards (Natural height, items-start, zero vertical stretching) */}
+              <div
+                data-testid="secondary-offers-grid"
+                className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start"
+              >
                 {secondaryOfferProducts.map((prod) => (
                   <ProductCard
                     key={prod.id}
@@ -904,6 +1107,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     nowMs={nowMs}
                     lang={lang}
                     themeId={themeId}
+                    layoutVariant="row"
                     showCountdown={true}
                     onSelectProduct={onSelectProduct}
                     onRequestProduct={onRequestProduct}
@@ -1294,8 +1498,8 @@ export const HomePage: React.FC<HomePageProps> = ({
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
                     {lang === 'ar'
-                      ? 'اطلب المنتج باسمك ورقمك لنتواصل معك فوراً'
-                      : 'Reserve any item in seconds with Name & Phone'}
+                      ? 'أرسل طلبك وسيتواصل معك المتجر عبر واتساب'
+                      : 'Submit your request and the store will contact you via WhatsApp'}
                   </div>
                 </div>
               </div>
@@ -1336,47 +1540,36 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       </section>
 
-      {/* SECTION 8: Final Compact Contact / Support Strip */}
+      {/* SECTION 8: Final Compact Contact / Support Strip (Primary Phone Text + Icon-Only Channels) */}
       <section className="max-w-[1600px] mx-auto px-4 lg:px-6">
         <div
           className={`bg-white border border-slate-200/90 p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 ${
-            themeId === 'contrast' ? 'rounded-none border-slate-300' : 'rounded-lg'
+            themeId === 'contrast'
+              ? 'rounded-none border-2 border-[#111318]'
+              : 'rounded-lg'
           }`}
         >
           <div className="space-y-1">
-            <h2 className="text-base font-bold text-[#111318]">
+            <h2 className="text-base font-extrabold text-[#111318]">
               {lang === 'ar'
-                ? 'هل تحتاج مساعدة في اختيار اللابتوب أو التجميعة المناسبة؟'
-                : 'Need Help Selecting the Right Laptop or PC Component?'}
+                ? 'هل تحتاج مساعدة في اختيار اللابتوب أو التجميعة أو حجز صيانة تبريد احترافية؟'
+                : 'Need Help Selecting Hardware or Booking Thermal Cooling Maintenance?'}
             </h2>
             <p className="text-xs text-slate-600">
               {lang === 'ar'
-                ? `فريق بيكسل ستور متواجد للرد على استفساراتكم عبر الهاتف وواتساب — ${settings.address.ar}`
-                : `Our specialists are available via Phone, WhatsApp, and Social Media — ${settings.address.en}`}
+                ? 'تواصل مباشرة عبر الرقم الرئيسي أو اضغط على أيقونات القنوات الرسمية والموقع الجغرافي.'
+                : 'Reach our specialists via our primary phone line or click any official channel icon.'}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <div
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#F4F3F7] text-xs font-mono-num font-bold text-[#111318]"
-              dir="ltr"
-            >
-              <Phone className="w-4 h-4 text-[#8E4DEB]" />
-              <span>{settings.phone}</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onNavigate('contact')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#111318] hover:bg-[#8E4DEB] text-white text-xs font-semibold transition-colors"
-            >
-              <MessageCircle className="w-4 h-4 text-[#EF875D]" />
-              <span>
-                {lang === 'ar'
-                  ? 'صفحة التواصل والواتساب'
-                  : 'WhatsApp & Social Channels'}
-              </span>
-            </button>
+            <ContactIconsBar
+              settings={settings}
+              lang={lang}
+              variant="card"
+              showPrimaryPhone={true}
+              showIconChannels={false}
+            />
           </div>
         </div>
       </section>

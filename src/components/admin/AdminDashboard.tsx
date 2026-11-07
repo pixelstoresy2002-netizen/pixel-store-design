@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import {
   ArrowLeft,
@@ -10,16 +12,14 @@ import {
   Flame,
   FolderTree,
   Globe,
-  KeyRound,
   LayoutDashboard,
-  Lock,
-  LogOut,
   MessageCircle,
   Plus,
   Settings,
   Sparkles,
   Tag,
   Trash2,
+  Wrench,
 } from 'lucide-react';
 import {
   ArabicFontId,
@@ -32,6 +32,7 @@ import {
   Offer,
   Product,
   ProductCondition,
+  StoreService,
   StoreSettings,
   UseCaseTag,
 } from '../../types/store';
@@ -41,7 +42,6 @@ import {
   formatUsd,
   isOfferActive,
 } from '../../utils/storeLogic';
-import { DesignPreviewControls } from '../prototype/DesignPreviewControls';
 import { CountdownBadge } from '../storefront/CountdownBadge';
 import { PixelLogo } from '../visuals/PixelLogo';
 import { ProductVisual } from '../visuals/ProductVisual';
@@ -49,6 +49,7 @@ import { ProductVisual } from '../visuals/ProductVisual';
 export type AdminTab =
   | 'overview'
   | 'products'
+  | 'services'
   | 'categories'
   | 'brands'
   | 'usecases'
@@ -67,12 +68,10 @@ interface AdminDashboardProps {
   useCaseTags: UseCaseTag[];
   offers: Offer[];
   customerRequests: CustomerRequest[];
+  services: StoreService[];
   settings: StoreSettings;
   nowMs: number;
   onToggleLanguage: () => void;
-  onSelectTheme: (themeId: DesignThemeId) => void;
-  onSelectFont: (fontId: ArabicFontId) => void;
-  onResetDesign: () => void;
   onBackToStorefront: () => void;
   onSaveProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
@@ -82,6 +81,8 @@ interface AdminDashboardProps {
   onSaveUseCaseTag: (tag: UseCaseTag) => void;
   onSaveOffer: (offer: Offer) => void;
   onDeleteOffer: (offerId: string) => void;
+  onSaveService: (service: StoreService) => void;
+  onDeleteService: (serviceId: string) => void;
   onUpdateRequestStatus: (
     requestId: string,
     status: CustomerRequest['status']
@@ -91,20 +92,16 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   lang,
-  themeId,
-  fontId,
   products,
   categories,
   brands,
   useCaseTags,
   offers,
   customerRequests,
+  services,
   settings,
   nowMs,
   onToggleLanguage,
-  onSelectTheme,
-  onSelectFont,
-  onResetDesign,
   onBackToStorefront,
   onSaveProduct,
   onDeleteProduct,
@@ -114,19 +111,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSaveUseCaseTag,
   onSaveOffer,
   onDeleteOffer,
+  onSaveService,
+  onDeleteService,
   onUpdateRequestStatus,
   onUpdateSettings,
 }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [loginEmail, setLoginEmail] = useState('admin@pixelstore.sy');
-  const [loginPass, setLoginPass] = useState('••••••••••••');
-
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
   // Product Editor State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [includeLaptopSpecs, setIncludeLaptopSpecs] = useState(false);
+  const [confirmDeleteProductId, setConfirmDeleteProductId] = useState<
+    string | null
+  >(null);
+
+  // Service Editor State
+  const [editingService, setEditingService] = useState<StoreService | null>(
+    null
+  );
 
   // Offer Creator State
   const [newOfferProductId, setNewOfferProductId] = useState(
@@ -179,6 +182,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         availability: 'IN_STOCK',
         primaryImage: 'laptop-rog-front',
         secondaryImage: 'laptop-rog-side',
+        galleryImages: [
+          'laptop-rog-front',
+          'laptop-rog-side',
+          'laptop-rog-ports',
+          'laptop-rog-cooling',
+          'laptop-rog-kit',
+        ],
         isBestSeller: false,
         isNewArrival: true,
         isFeatured: false,
@@ -201,100 +211,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // 1. ADMIN LOGIN SCREEN (Previewable anytime via "Lock / Login View" button)
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-[#111318] bg-pixel-grid-dark flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-[#8E4DEB] via-[#D66C9D] to-[#EF875D]" />
-          <div className="p-6 sm:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <PixelLogo variant="light" size="md" />
-              <span className="text-xs font-mono-num font-bold px-2.5 py-1 rounded bg-[#F4F3F7] text-[#8E4DEB]">
-                ADMIN PORTAL
-              </span>
-            </div>
 
-            <div>
-              <h1 className="text-xl font-extrabold text-[#111318]">
-                {lang === 'ar'
-                  ? 'تسجيل الدخول إلى لوحة إدارة بيكسل ستور'
-                  : 'Sign In to Pixel Store Admin'}
-              </h1>
-              <p className="text-xs text-slate-500 mt-1">
-                {lang === 'ar'
-                  ? 'إدارة الكتالوج، سعر الصرف، العروض الموقوتة، وطلبات الزبائن'
-                  : 'Manage catalog, global SYP exchange rate, timed offers, and WhatsApp requests'}
-              </p>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setIsLoggedIn(true);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-xs font-bold text-[#111318] mb-1">
-                  {lang === 'ar' ? 'البريد الإداري' : 'Admin Username / Email'}
-                </label>
-                <input
-                  type="email"
-                  dir="ltr"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs font-mono-num text-[#111318]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#111318] mb-1">
-                  {lang === 'ar' ? 'كلمة المرور' : 'Password'}
-                </label>
-                <input
-                  type="password"
-                  dir="ltr"
-                  value={loginPass}
-                  onChange={(e) => setLoginPass(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs text-[#111318]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold transition-colors flex items-center justify-center gap-2"
-              >
-                <KeyRound className="w-4 h-4" />
-                <span>
-                  {lang === 'ar'
-                    ? 'دخول إلى لوحة التحكم'
-                    : 'Sign In to Dashboard'}
-                </span>
-              </button>
-            </form>
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={onBackToStorefront}
-                className="text-xs font-semibold text-slate-500 hover:text-[#111318]"
-              >
-                {lang === 'ar' ? 'العودة إلى واجهة المتجر' : 'Back to Storefront'}
-              </button>
-              <button
-                type="button"
-                onClick={onToggleLanguage}
-                className="text-xs font-bold text-[#8E4DEB]"
-              >
-                {lang === 'ar' ? 'English' : 'العربية'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const navItems: {
     id: AdminTab;
@@ -312,6 +229,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       label: { ar: 'المنتجات والمحرر', en: 'Products & Editor' },
       icon: <Boxes className="w-4 h-4" />,
       badge: products.length,
+    },
+    {
+      id: 'services',
+      label: { ar: 'إدارة الخدمات (Services)', en: 'Services Management' },
+      icon: <Wrench className="w-4 h-4" />,
+      badge: services.length,
     },
     {
       id: 'offers',
@@ -355,34 +278,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const BackArrow = lang === 'ar' ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="min-h-screen bg-[#F4F3F7] flex flex-col">
+    <div
+      data-testid="admin-dashboard"
+      className="min-h-screen bg-[#F4F3F7] flex flex-col"
+    >
       {/* Admin Top Header */}
-      <header className="bg-[#111318] text-white border-b border-white/10 px-4 lg:px-6 h-14 flex items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="bg-[#111318] text-white border-b border-white/10 px-3 sm:px-4 lg:px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-wrap">
           <PixelLogo variant="dark" size="sm" />
-          <span className="text-xs font-mono-num px-2 py-0.5 rounded bg-[#8E4DEB]/25 border border-[#8E4DEB]/40 text-white">
+          <span className="hidden sm:inline-block text-xs font-mono-num px-2 py-0.5 rounded bg-[#8E4DEB]/25 border border-[#8E4DEB]/40 text-white">
             {lang === 'ar' ? 'لوحة الإدارة' : 'ADMIN CONSOLE'}
+          </span>
+          <span
+            data-testid="admin-demo-notice"
+            className="text-[11px] px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/35 text-amber-200 font-semibold"
+          >
+            {lang === 'ar'
+              ? 'نسخة تجريبية للمعاينة المحلية (بيانات محلية — يلزم تأمين المصادقة قبل النشر الإنتاجي)'
+              : 'DEMO PROTOTYPE — Local Preview Only (Unauthenticated — Secure Before Production)'}
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Global Exchange Rate Quick Indicator */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('settings')}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-xs font-mono-num"
-            dir="ltr"
-          >
-            <span className="text-slate-300">Rate: 1$ =</span>
-            <span className="font-bold text-[#EF875D]">
-              {settings.usdToSypRate.toLocaleString('en-US')} SYP
-            </span>
-          </button>
-
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onToggleLanguage}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-semibold"
+            className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-[11px] sm:text-xs font-semibold cursor-pointer"
           >
             <Globe className="w-3.5 h-3.5 text-[#8E4DEB]" />
             <span>{lang === 'ar' ? 'English' : 'العربية'}</span>
@@ -390,36 +311,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsLoggedIn(false)}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-semibold text-slate-300"
-            title={lang === 'ar' ? 'معاينة شاشة تسجيل الدخول' : 'Preview Login Screen'}
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">
-              {lang === 'ar' ? 'شاشة الدخول' : 'Login View'}
-            </span>
-          </button>
-
-          <button
-            type="button"
+            data-testid="exit-admin-button"
             onClick={onBackToStorefront}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-semibold transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-md bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span>
-              {lang === 'ar' ? 'معاينة المتجر العام' : 'Back to Storefront'}
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">
+              {lang === 'ar' ? 'معاينة المتجر' : 'Storefront'}
             </span>
           </button>
-
-          <DesignPreviewControls
-            lang={lang}
-            themeId={themeId}
-            fontId={fontId}
-            onSelectTheme={onSelectTheme}
-            onSelectFont={onSelectFont}
-            onReset={onResetDesign}
-            variant="navbar-dark"
-          />
         </div>
       </header>
 
@@ -432,20 +332,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Main Admin Workspace */}
-      <div className="flex-1 max-w-[1600px] w-full mx-auto px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-4 lg:px-6 py-5 sm:py-6 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* Sidebar Navigation (3 Columns) */}
-        <aside className="lg:col-span-3 bg-white rounded-xl border border-slate-200/90 p-3 space-y-1">
+        <aside className="lg:col-span-3 min-w-0 bg-white rounded-xl border border-slate-200/90 p-2.5 sm:p-3 space-y-1">
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
+                data-testid={`admin-tab-${item.id}`}
                 onClick={() => {
                   setActiveTab(item.id);
                   setEditingProduct(null);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                   active
                     ? 'bg-[#111318] text-white'
                     : 'text-slate-700 hover:bg-[#F4F3F7]'
@@ -474,7 +375,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </aside>
 
         {/* Main Panel (9 Columns) */}
-        <main className="lg:col-span-9 space-y-6">
+        <main className="lg:col-span-9 min-w-0 space-y-6">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -1186,7 +1087,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  {/* Desktop & Tablet Table View (>= 768px) */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-500">
@@ -1285,20 +1187,187 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteProduct(prod.id)}
-                                  className="p-1.5 rounded bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 transition-colors"
-                                  aria-label={`Delete ${prod.name.en}`}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {confirmDeleteProductId === prod.id ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onDeleteProduct(prod.id);
+                                        setConfirmDeleteProductId(null);
+                                        showToast(
+                                          'تم حذف المنتج بنجاح',
+                                          'Product deleted'
+                                        );
+                                      }}
+                                      className="px-2 py-1 rounded bg-rose-600 text-white text-[10px] font-bold"
+                                    >
+                                      {lang === 'ar' ? 'تأكيد' : 'Confirm'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setConfirmDeleteProductId(null)
+                                      }
+                                      className="px-1.5 py-1 rounded bg-slate-100 text-slate-600 text-[10px] font-bold"
+                                    >
+                                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setConfirmDeleteProductId(prod.id)
+                                    }
+                                    className="p-1.5 rounded bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 transition-colors"
+                                    aria-label={`Delete ${prod.name.en}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Mobile Card Layout (< 768px — Full Readable Product Titles, Zero Horizontal Crushing) */}
+                  <div
+                    data-testid="admin-mobile-products-list"
+                    className="md:hidden space-y-2.5"
+                  >
+                    {products.map((prod) => (
+                      <div
+                        key={prod.id}
+                        data-testid={`admin-mobile-product-card-${prod.id}`}
+                        className="rounded-xl border border-slate-200 bg-[#FAF9FC] p-3 space-y-2.5"
+                      >
+                        {/* Top Row: Thumbnail + Full Readable Product Name + SKU & Condition */}
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-14 h-11 rounded-lg bg-white border border-slate-200 overflow-hidden shrink-0">
+                            <ProductVisual
+                              visualKey={prod.primaryImage}
+                              alt={prod.name[lang]}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="text-xs font-extrabold text-[#111318] leading-snug line-clamp-2">
+                              {prod.name[lang]}
+                            </div>
+                            <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
+                              <span
+                                className="font-mono-num text-slate-500"
+                                dir="ltr"
+                              >
+                                {prod.sku}
+                              </span>
+                              <span className="text-slate-300">·</span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  prod.condition === 'USED'
+                                    ? 'bg-amber-50 text-[#D96B38] border border-amber-200'
+                                    : 'bg-slate-100 text-[#111318]'
+                                }`}
+                              >
+                                {prod.condition}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bottom Row: Price (USD + SYP) & Actions (Best Seller, Edit, Protected Delete) */}
+                        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="font-mono-num">
+                            <span
+                              className="text-sm font-extrabold text-[#111318]"
+                              dir="ltr"
+                            >
+                              {formatUsd(prod.priceUsd)}
+                            </span>
+                            <span className="text-[11px] text-[#8E4DEB] font-semibold ms-1.5">
+                              {formatSyp(
+                                convertUsdToSyp(
+                                  prod.priceUsd,
+                                  settings.usdToSypRate
+                                ),
+                                lang
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onToggleBestSeller(prod.id)}
+                              className={`px-2 py-1 rounded text-[11px] font-bold transition-colors ${
+                                prod.isBestSeller
+                                  ? 'bg-[#8E4DEB] text-white'
+                                  : 'bg-white border border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {prod.isBestSeller
+                                ? lang === 'ar'
+                                  ? 'الأكثر مبيعاً ★'
+                                  : 'Best Seller ★'
+                                : lang === 'ar'
+                                ? 'عادي'
+                                : 'Standard'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openProductEditor(prod)}
+                              aria-label={`Edit ${prod.name.en}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#111318] text-white text-[11px] font-bold"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
+                            </button>
+
+                            {confirmDeleteProductId === prod.id ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onDeleteProduct(prod.id);
+                                    setConfirmDeleteProductId(null);
+                                    showToast(
+                                      'تم حذف المنتج بنجاح',
+                                      'Product deleted'
+                                    );
+                                  }}
+                                  className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold"
+                                >
+                                  {lang === 'ar' ? 'تأكيد' : 'Confirm'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteProductId(null)
+                                  }
+                                  className="px-2 py-1 rounded bg-slate-200 text-slate-700 text-[11px] font-bold"
+                                >
+                                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setConfirmDeleteProductId(prod.id)
+                                }
+                                aria-label={`Delete ${prod.name.en}`}
+                                className="p-1.5 rounded bg-rose-50 text-rose-600 border border-rose-200"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -2148,8 +2217,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[#111318] mb-1">
                       {lang === 'ar'
-                        ? 'رقم الهاتف المعروض'
-                        : 'Public Phone Number'}
+                        ? 'الرقم الرئيسي المعروض (Primary Phone)'
+                        : 'Primary Public Phone Number'}
                     </label>
                     <input
                       type="text"
@@ -2168,8 +2237,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[#111318] mb-1">
                       {lang === 'ar'
-                        ? 'رقم واتساب لاستقبال الطلبات'
-                        : 'WhatsApp Number'}
+                        ? 'الرقم الثاني (يظهر كأيقونة اتصال)'
+                        : 'Secondary Phone (Icon-Only Trigger)'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.secondaryPhone ?? ''}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          secondaryPhone: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'رقم واتساب لاستقبال الطلبات (أيقونة)'
+                        : 'WhatsApp Number (Icon-Only Trigger)'}
                     </label>
                     <input
                       type="text"
@@ -2184,10 +2273,140 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'رابط موقع المتجر على Google Maps (أيقونة)'
+                        : 'Google Maps Location URL (Icon-Only Trigger)'}
+                    </label>
+                    <input
+                      type="url"
+                      dir="ltr"
+                      value={localSettings.mapLocationUrl ?? ''}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          mapLocationUrl: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                    />
+                  </div>
+                </div>
+
+                {/* Working Hours & Official Social Links */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'أوقات العمل (عربي)'
+                        : 'Working Hours (Arabic)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={localSettings.workingHours.ar}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          workingHours: {
+                            ...localSettings.workingHours,
+                            ar: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'أوقات العمل (إنكليزي)'
+                        : 'Working Hours (English)'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.workingHours.en}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          workingHours: {
+                            ...localSettings.workingHours,
+                            en: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'رابط قناة تلغرام (Telegram)'
+                        : 'Telegram Channel URL'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.telegramChannel}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          telegramChannel: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'رابط إنستغرام (Instagram)'
+                        : 'Instagram Page URL'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.instagramHandle}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          instagramHandle: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {lang === 'ar'
+                        ? 'رابط فيسبوك (Facebook)'
+                        : 'Facebook Page URL'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.facebookPage}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          facebookPage: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                    />
+                  </div>
                 </div>
 
                 {/* Promotional Banner Content */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                   <div>
                     <label className="block text-xs font-bold text-[#111318] mb-1">
                       {lang === 'ar'
@@ -2245,6 +2464,394 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* TAB 10: SERVICES MANAGEMENT (إدارة الخدمات) */}
+          {activeTab === 'services' && (
+            <div className="space-y-6" data-testid="admin-services-panel">
+              <div className="bg-white rounded-xl border border-slate-200/90 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-base font-extrabold text-[#111318]">
+                    {lang === 'ar'
+                      ? 'إدارة الخدمات الفنية وحلول التبريد (Services Management)'
+                      : 'Store Technical Services & Cooling Solutions Management'}
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === 'ar'
+                      ? 'إضافة، تعديل، أو تفعيل/إيقاف الخدمات المعروضة في قسم الخدمات وتبويب حلول التبريد في المتجر'
+                      : 'Create, edit, or toggle active status for store services and cooling solutions'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-testid="admin-add-service-btn"
+                  onClick={() =>
+                    setEditingService({
+                      id: `service-${Date.now()}`,
+                      slug: `service-${Date.now()}`,
+                      title: { ar: '', en: '' },
+                      subtitle: { ar: '', en: '' },
+                      description: { ar: '', en: '' },
+                      iconKey: 'maintenance',
+                      badge: {
+                        ar: 'خدمة فنية معتمدة',
+                        en: 'Certified Technical Service',
+                      },
+                      turnaroundNote: {
+                        ar: 'مدة التنفيذ: خلال 24 ساعة',
+                        en: 'Turnaround: Within 24 hours',
+                      },
+                      isActive: true,
+                      isFeatured: false,
+                      showInNavbarShortcut: false,
+                      highlights: [
+                        {
+                          title: { ar: 'المرحلة الأولى', en: 'Stage 1' },
+                          description: {
+                            ar: 'فحص وتشخيص أولي شامل',
+                            en: 'Initial comprehensive diagnostic',
+                          },
+                        },
+                        {
+                          title: { ar: 'المرحلة الثانية', en: 'Stage 2' },
+                          description: {
+                            ar: 'تنفيذ الصيانة والترقية بقطع أصلية',
+                            en: 'Servicing with genuine components',
+                          },
+                        },
+                        {
+                          title: { ar: 'المرحلة الثالثة', en: 'Stage 3' },
+                          description: {
+                            ar: 'اختبار الاستقرار النهائي قبل التسليم',
+                            en: 'Final stability verification before handover',
+                          },
+                        },
+                      ],
+                      checklist: [
+                        {
+                          ar: 'فحص مجاني قبل البدء',
+                          en: 'Complimentary pre-check',
+                        },
+                      ],
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>
+                    {lang === 'ar' ? 'إضافة خدمة جديدة' : 'Add New Service'}
+                  </span>
+                </button>
+              </div>
+
+              {editingService && (
+                <form
+                  data-testid="admin-service-editor-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    onSaveService(editingService);
+                    setEditingService(null);
+                    showToast(
+                      'تم حفظ بيانات الخدمة بنجاح',
+                      'Service saved successfully'
+                    );
+                  }}
+                  className="bg-white rounded-xl border-2 border-[#8E4DEB] p-6 space-y-4"
+                >
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h2 className="text-sm font-extrabold text-[#111318]">
+                      {lang === 'ar' ? 'محرر الخدمة الفنية' : 'Service Editor'}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setEditingService(null)}
+                      className="text-xs font-bold text-slate-500 hover:text-[#111318]"
+                    >
+                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'عنوان الخدمة (عربي) *'
+                          : 'Service Title (Arabic) *'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editingService.title.ar}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            title: {
+                              ...editingService.title,
+                              ar: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'عنوان الخدمة (إنكليزي) *'
+                          : 'Service Title (English) *'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        required
+                        value={editingService.title.en}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            title: {
+                              ...editingService.title,
+                              en: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'العنوان الفرعي المختصر (عربي)'
+                          : 'Subtitle (Arabic)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={editingService.subtitle.ar}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            subtitle: {
+                              ...editingService.subtitle,
+                              ar: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'العنوان الفرعي المختصر (إنكليزي)'
+                          : 'Subtitle (English)'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={editingService.subtitle.en}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            subtitle: {
+                              ...editingService.subtitle,
+                              en: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'وصف الخدمة التفصيلي (عربي)'
+                          : 'Description (Arabic)'}
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editingService.description.ar}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            description: {
+                              ...editingService.description,
+                              ar: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {lang === 'ar'
+                          ? 'وصف الخدمة التفصيلي (إنكليزي)'
+                          : 'Description (English)'}
+                      </label>
+                      <textarea
+                        rows={3}
+                        dir="ltr"
+                        value={editingService.description.en}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            description: {
+                              ...editingService.description,
+                              en: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-6 pt-2">
+                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingService.isActive}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            isActive: e.target.checked,
+                          })
+                        }
+                        className="rounded text-[#8E4DEB]"
+                      />
+                      <span>
+                        {lang === 'ar'
+                          ? 'مفعلة في واجهة المتجر (Active)'
+                          : 'Active on Storefront'}
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingService.isFeatured}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            isFeatured: e.target.checked,
+                          })
+                        }
+                        className="rounded text-[#8E4DEB]"
+                      />
+                      <span>
+                        {lang === 'ar' ? 'خدمة مميزة (Featured)' : 'Featured'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold"
+                    >
+                      {lang === 'ar' ? 'حفظ الخدمة' : 'Save Service'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="grid grid-cols-1 gap-4">
+                {services.map((srv) => (
+                  <div
+                    key={srv.id}
+                    data-testid={`admin-service-row-${srv.id}`}
+                    className="bg-white rounded-xl border border-slate-200/90 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1 max-w-2xl">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-extrabold text-[#111318]">
+                          {srv.title[lang]}
+                        </span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            srv.isActive
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {srv.isActive
+                            ? lang === 'ar'
+                              ? 'نشطة'
+                              : 'Active'
+                            : lang === 'ar'
+                            ? 'مخفية'
+                            : 'Inactive'}
+                        </span>
+                        {srv.id === 'service-cooling' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-bold">
+                            {lang === 'ar'
+                              ? 'مرتبطة بتبويب حلول التبريد في الشريط العلوي'
+                              : 'Linked to Top Navbar Cooling Tab'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-[#8E4DEB]">
+                        {srv.subtitle[lang]}
+                      </p>
+                      <p className="text-xs text-slate-500 line-clamp-2">
+                        {srv.description[lang]}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSaveService({ ...srv, isActive: !srv.isActive });
+                          showToast(
+                            'تم تحديث حالة الخدمة',
+                            'Service status updated'
+                          );
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 hover:border-[#8E4DEB] text-xs font-bold text-slate-700"
+                      >
+                        {srv.isActive
+                          ? lang === 'ar'
+                            ? 'إخفاء مؤقت'
+                            : 'Disable'
+                          : lang === 'ar'
+                          ? 'تفعيل'
+                          : 'Enable'}
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid={`admin-edit-service-${srv.id}`}
+                        onClick={() => setEditingService({ ...srv })}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-[#111318] text-[#111318] hover:text-white text-xs font-bold transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
+                      </button>
+
+                      {srv.id !== 'service-cooling' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteService(srv.id);
+                            showToast('تم حذف الخدمة', 'Service deleted');
+                          }}
+                          className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                          title={lang === 'ar' ? 'حذف الخدمة' : 'Delete Service'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </main>

@@ -1,14 +1,14 @@
 export type Language = 'ar' | 'en';
 
-export type DesignThemeId = 'hybrid' | 'contrast' | 'retail';
+export type DesignThemeId = 'contrast' | 'hybrid' | 'retail';
 
 export type ArabicFontId =
+  | 'cairo'
   | 'tajawal'
   | 'readex'
   | 'ibm'
   | 'alexandria'
-  | 'almarai'
-  | 'cairo';
+  | 'almarai';
 
 export type ProductCondition = 'NEW' | 'USED';
 
@@ -105,12 +105,44 @@ export interface CustomerRequest {
   status: 'NEW' | 'CONTACTED' | 'COMPLETED';
 }
 
+export interface StoreService {
+  id: string;
+  slug: string;
+  title: BilingualText;
+  badge: BilingualText;
+  subtitle: BilingualText;
+  description: BilingualText;
+  highlights: {
+    title: BilingualText;
+    description: BilingualText;
+  }[];
+  checklist: BilingualText[];
+  turnaroundNote: BilingualText;
+  startingPriceNote?: BilingualText;
+  iconKey: 'cooling' | 'maintenance' | 'cameras' | 'custom';
+  isActive: boolean;
+  isFeatured: boolean;
+  showInNavbarShortcut?: boolean;
+  thermalBenchmark?: {
+    deviceModel: BilingualText;
+    beforeTempC: number;
+    afterTempC: number;
+    sustainedClockBefore: string;
+    sustainedClockAfter: string;
+    fanNoiseBefore: BilingualText;
+    fanNoiseAfter: BilingualText;
+  };
+  galleryImages?: string[];
+}
+
 export interface StoreSettings {
   storeName: BilingualText;
   tagline: BilingualText;
   usdToSypRate: number;
   phone: string;
+  secondaryPhone?: string;
   whatsappNumber: string;
+  mapLocationUrl?: string;
   address: BilingualText;
   workingHours: BilingualText;
   instagramHandle: string;

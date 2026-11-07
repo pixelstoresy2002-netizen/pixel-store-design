@@ -1,4 +1,6 @@
-import React from 'react';
+'use client';
+
+import React, { useMemo } from 'react';
 import {
   Brand,
   DesignThemeId,
@@ -9,10 +11,14 @@ import {
 import {
   formatSyp,
   formatUsd,
+  getProductGalleryImages,
   resolveProductPricing,
 } from '../../utils/storeLogic';
-import { ProductVisual } from '../visuals/ProductVisual';
 import { CountdownBadge } from './CountdownBadge';
+import {
+  ProductGalleryStage,
+  useProductHoverGallery,
+} from './ProductGalleryHover';
 
 interface ProductCardProps {
   product: Product;
@@ -43,6 +49,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const brand = brands.find((b) => b.id === product.brandId);
   const pricing = resolveProductPricing(product, offers, usdToSypRate, nowMs);
+
+  const galleryImages = useMemo(
+    () => getProductGalleryImages(product),
+    [product]
+  );
+
+  const { activeIndex, isHovering, handleMouseEnter, handleMouseLeave } =
+    useProductHoverGallery(galleryImages);
 
   // Single top status tag (max 1 tag)
   let topTagText = '';
@@ -90,10 +104,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       ? 'مستعمل'
       : 'USED';
 
-  // Horizontal compact retail row variant (used in Best Sellers or featured lists to break identical grid monotony)
+  // Horizontal compact retail row variant (used in Best Sellers or 2x2 Secondary Offer Grid)
   if (layoutVariant === 'row') {
     return (
       <article
+        data-testid={`product-card-${product.id}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         className={`group relative flex items-stretch bg-white transition-colors duration-150 overflow-hidden ${
           themeId === 'contrast'
             ? 'rounded-none border border-slate-300 hover:border-[#111318]'
@@ -106,23 +123,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           type="button"
           onClick={() => onSelectProduct(product.id)}
           aria-label={product.name[lang]}
-          className="relative w-28 sm:w-36 shrink-0 bg-[#F8F7FA] overflow-hidden border-e border-slate-100"
+          className="relative w-28 sm:w-34 shrink-0 bg-[#F8F7FA] overflow-hidden border-e border-slate-100"
         >
-          <div className="absolute inset-0 transition-opacity duration-200 group-hover:opacity-0">
-            <ProductVisual
-              visualKey={product.primaryImage}
-              alt={product.name[lang]}
-            />
-          </div>
-          <div className="absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <ProductVisual
-              visualKey={product.secondaryImage}
-              alt={`${product.name[lang]} - 2`}
-            />
-          </div>
+          <ProductGalleryStage
+            images={galleryImages}
+            activeIndex={activeIndex}
+            isHovering={isHovering}
+            productName={product.name[lang]}
+            showCounterBadge={true}
+          />
           {topTagText && (
             <span
-              className={`absolute top-2 start-2 px-1.5 py-0.5 text-[10px] font-semibold tracking-tight ${topTagTone}`}
+              className={`absolute top-2 start-2 z-20 px-1.5 py-0.5 text-[10px] font-semibold tracking-tight ${topTagTone}`}
             >
               {topTagText}
             </span>
@@ -130,8 +142,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </button>
 
         <div className="flex flex-col flex-1 p-3 justify-between gap-2 min-w-0">
-          <div>
-            <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-slate-500 mb-1">
+          <div className="space-y-1">
+            <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-slate-500">
               <span className="font-semibold text-slate-700 uppercase">
                 {brand?.name ?? 'PIXEL'}
               </span>
@@ -166,6 +178,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 {product.name[lang]}
               </button>
             </h3>
+
+            {showCountdown && pricing.activeOffer && (
+              <div className="pt-0.5">
+                <CountdownBadge
+                  endTimeIso={pricing.activeOffer.endTime}
+                  nowMs={nowMs}
+                  lang={lang}
+                  variant="compact"
+                />
+              </div>
+            )}
           </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-end justify-between gap-2">
@@ -217,7 +240,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <article
-      className={`group relative flex flex-col transition-colors duration-150 overflow-hidden ${cardSurfaceClass}`}
+      data-testid={`product-card-${product.id}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`group relative flex flex-col min-w-0 transition-colors duration-150 overflow-hidden ${cardSurfaceClass}`}
     >
       {/* Top accent bar in Pixel Contrast when product has offer or is Best Seller */}
       {themeId === 'contrast' && (
@@ -232,50 +258,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
       )}
 
-      {/* Image Container with smooth desktop hover transition from primary to secondary image */}
+      {/* Image Container with automatic 5-image hover cycling */}
       <button
         type="button"
         onClick={() => onSelectProduct(product.id)}
         aria-label={product.name[lang]}
         className="relative w-full aspect-[4/3] bg-[#F8F7FA] overflow-hidden text-start border-b border-slate-100 focus-visible:outline-2 focus-visible:outline-[#8E4DEB]"
       >
-        {/* Primary Image */}
-        <div className="absolute inset-0 transition-opacity duration-200 ease-out group-hover:opacity-0">
-          <ProductVisual
-            visualKey={product.primaryImage}
-            alt={product.name[lang]}
-          />
-        </div>
-        {/* Secondary Image (Revealed on pointer hover) */}
-        <div className="absolute inset-0 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100">
-          <ProductVisual
-            visualKey={product.secondaryImage}
-            alt={`${product.name[lang]} - 2`}
-          />
-        </div>
+        <ProductGalleryStage
+          images={galleryImages}
+          activeIndex={activeIndex}
+          isHovering={isHovering}
+          productName={product.name[lang]}
+          showCounterBadge={true}
+        />
 
         {/* Single Top Tag */}
         {topTagText && (
           <span
-            className={`absolute top-2.5 start-2.5 px-2 py-0.5 text-[11px] font-semibold tracking-tight ${
+            className={`absolute top-2.5 start-2.5 z-20 px-2 py-0.5 text-[11px] font-semibold tracking-tight ${
               themeId === 'contrast' ? 'rounded-none' : 'rounded-xs'
             } ${topTagTone}`}
           >
             {topTagText}
           </span>
         )}
-
-        {/* Subtle Secondary View Indicator on Hover */}
-        <span className="absolute bottom-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-[#111318]/80 text-white text-[10px] font-mono-num px-1.5 py-0.5 rounded-xs pointer-events-none">
-          2/2
-        </span>
       </button>
 
       {/* Content Area */}
-      <div className="flex flex-col flex-1 p-3 justify-between gap-2.5">
+      <div className="flex flex-col flex-1 p-2.5 sm:p-3 justify-between gap-2 min-w-0">
         <div>
           {/* Clean Unboxed Metadata Line (Brand · Condition · Availability) */}
-          <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-slate-500 mb-1">
+          <div className="flex items-center flex-wrap gap-1 text-[10.5px] sm:text-[11px] text-slate-500 mb-1">
             <span className="font-semibold text-slate-700 uppercase tracking-tight">
               {brand?.name ?? 'PIXEL'}
             </span>
@@ -302,7 +316,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
 
           {/* Product Name — controlled weight (500/600) so Arabic typography stays clean */}
-          <h3 className="text-[13.5px] font-medium text-[#111318] leading-snug line-clamp-2 min-h-[2.6em]">
+          <h3 className="text-[12.5px] sm:text-[13.5px] font-medium text-[#111318] leading-snug line-clamp-2 min-h-[2.6em]">
             <button
               type="button"
               onClick={() => onSelectProduct(product.id)}
@@ -339,17 +353,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Dual Price Hierarchy + Action */}
         <div
-          className={`pt-2 border-t flex items-end justify-between gap-2 ${
+          className={`pt-2 border-t flex flex-wrap items-end justify-between gap-1.5 ${
             themeId === 'contrast'
               ? 'border-slate-200'
               : 'border-slate-100'
           }`}
         >
-          <div>
+          <div className="min-w-0">
             {/* USD Primary Price */}
-            <div className="flex items-baseline gap-1.5" dir="ltr">
+            <div className="flex items-baseline flex-wrap gap-1" dir="ltr">
               <span
-                className={`font-mono-num text-base font-bold ${
+                className={`font-mono-num text-sm sm:text-base font-bold ${
                   pricing.hasActiveOffer && themeId === 'retail'
                     ? 'text-[#D95B26]'
                     : 'text-[#111318]'
@@ -358,13 +372,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 {formatUsd(pricing.effectiveUsd)}
               </span>
               {pricing.hasActiveOffer && (
-                <span className="font-mono-num text-xs text-slate-400 line-through">
+                <span className="font-mono-num text-[11px] text-slate-400 line-through">
                   {formatUsd(pricing.originalUsd)}
                 </span>
               )}
             </div>
             {/* Converted SYP Price */}
-            <div className="font-mono-num text-[11px] font-medium text-slate-500 mt-0.5">
+            <div className="font-mono-num text-[10px] sm:text-[11px] font-medium text-slate-500 mt-0.5 truncate">
               {formatSyp(pricing.effectiveSyp, lang)}
             </div>
           </div>
@@ -373,7 +387,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             type="button"
             onClick={() => onRequestProduct(product)}
             disabled={product.availability === 'OUT_OF_STOCK'}
-            className={`px-2.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-2 sm:px-2.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
               themeId === 'contrast' ? 'rounded-none' : 'rounded-sm'
             } ${
               product.availability === 'OUT_OF_STOCK'

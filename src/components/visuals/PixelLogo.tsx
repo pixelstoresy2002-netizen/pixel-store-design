@@ -35,7 +35,6 @@ export const PixelLogo: React.FC<PixelLogoProps> = ({
     <div className={`inline-flex items-center gap-2 select-none ${className}`} dir="ltr">
       <svg
         viewBox="0 0 280 95"
-        dir="ltr"
         className={`${heightClass} w-auto`}
         aria-label="PIXEL STORE"
         role="img"

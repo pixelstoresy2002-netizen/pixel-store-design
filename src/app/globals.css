@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --pixel-purple: #8E4DEB;
+    --pixel-pink: #D66C9D;
+    --pixel-coral: #EF875D;
+    --pixel-ink: #111318;
+    --pixel-base: #F4F3F7;
+
+    /* Strict Default Arabic Font: Cairo */
+    --font-arabic-active: 'Cairo', sans-serif;
+    --font-latin-active: 'Plus Jakarta Sans', sans-serif;
+    --ar-line-height: 1.62;
+    --ar-letter-spacing: 0em;
+  }
+
+  /* Approved Arabic Font: Cairo */
+  html[data-arabic-font="Cairo"],
+  html[data-arabic-font="cairo"] {
+    --font-arabic-active: 'Cairo', sans-serif;
+    --ar-line-height: 1.62;
+  }
+
+  html,
+  body {
+    background-color: #ECEAF2;
+    color: #111318;
+  }
+
+  html[dir="rtl"] body {
+    font-family: var(--font-arabic-active), var(--font-latin-active);
+    line-height: var(--ar-line-height);
+  }
+
+  html[dir="ltr"] body {
+    font-family: var(--font-latin-active), var(--font-arabic-active);
+    line-height: 1.55;
+  }
+
+  button:not(:disabled),
+  a[href],
+  select,
+  summary,
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
+.font-mono-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-pixel {
+  font-family: 'Silkscreen', 'JetBrains Mono', monospace;
+}
+
+/* Restrained, subtle pixel dot/grid patterns used selectively */
+.bg-pixel-subtle {
+  background-image: radial-gradient(rgba(142, 77, 235, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.bg-pixel-grid-dark {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Pixel Corner Notch Accent for Pixel Contrast Theme */
+.pixel-corner-frame {
+  position: relative;
+}
+.pixel-corner-frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: 6px;
+  height: 6px;
+  background-color: #8E4DEB;
+  pointer-events: none;
+}
+.pixel-corner-frame::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: 6px;
+  height: 6px;
+  background-color: #EF875D;
+  pointer-events: none;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Custom thin scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F4F3F7;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBC9D4;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8E4DEB;
+}

@@ -4,6 +4,7 @@ import {
   CustomerRequest,
   Offer,
   Product,
+  StoreService,
   StoreSettings,
   UseCaseTag,
 } from '../types/store';
@@ -18,22 +19,24 @@ export const INITIAL_STORE_SETTINGS: StoreSettings = {
     en: 'Laptops, PC Components, Custom Builds, & Gaming / Office Peripherals',
   },
   usdToSypRate: 12500,
-  phone: '+963 XXX XXX XXX',
-  whatsappNumber: '963000000000',
+  phone: '+963 933 811 106',
+  secondaryPhone: '+963 9XX XXX XXX',
+  whatsappNumber: '963900000000',
+  mapLocationUrl: 'https://maps.google.com',
   address: {
     ar: '[عنوان المتجر — يتم تحديده من الإعدادات]',
     en: '[Store Location — Configurable in Settings]',
   },
   workingHours: {
-    ar: '[أوقات العمل — يتم تحديدها من الإعدادات]',
-    en: '[Working Hours — Configurable in Settings]',
+    ar: 'أوقات العمل: تُحدد من إعدادات المتجر (بيانات تجريبية)',
+    en: 'Working Hours: Configurable in Store Settings (Demo)',
   },
-  instagramHandle: '@pixelstore',
-  facebookPage: 'fb.com/pixelstore',
-  telegramChannel: 't.me/pixelstore',
+  instagramHandle: 'https://instagram.com',
+  facebookPage: 'https://facebook.com',
+  telegramChannel: 'https://t.me',
   topPromoBanner: {
-    ar: 'أسعار المنتجات محدثة بالدولار والليرة السورية — سعر الصرف الحالي: 1$ = 12,500 ل.س',
-    en: 'Dual USD & SYP Pricing — Current Exchange Rate: 1 USD = 12,500 SYP',
+    ar: 'أجهزة لابتوب وتجميعات PC ومستلزمات تقنية مع خدمات صيانة وحلول تبريد',
+    en: 'Laptops, Custom PC Builds & Peripherals with Hardware Maintenance & Cooling Services',
   },
   topPromoActive: true,
 };
@@ -163,8 +166,8 @@ export const INITIAL_CATEGORIES: Category[] = [
     parentId: 'laptops',
     name: { ar: 'لابتوبات جديدة (New)', en: 'New Laptops' },
     description: {
-      ar: 'أحدث اللابتوبات بالكرتونة المختومة مع كفالة Pixel Store.',
-      en: 'Factory-sealed brand new laptops with full store warranty.',
+      ar: 'أحدث اللابتوبات الجديدة بحالة المصنع الأصلية لمختلف الاستخدامات.',
+      en: 'Factory-sealed brand new laptops across key performance tiers.',
     },
     iconKey: 'laptop',
     useCaseIds: ['gaming', 'work-study', 'everyday'],
@@ -175,8 +178,8 @@ export const INITIAL_CATEGORIES: Category[] = [
     parentId: 'laptops',
     name: { ar: 'لابتوبات مستعملة نظيفة (Used)', en: 'Used Laptops' },
     description: {
-      ar: 'لابتوبات مستعملة بحالة ممتازة ومفحوصة بالكامل بأفضل سعر.',
-      en: 'Thoroughly tested pre-owned laptops in clean condition at great value.',
+      ar: 'لابتوبات مستعملة بحالة نظيفة وتوصف حالة كل جهاز بشكل مستقل.',
+      en: 'Pre-owned laptops in clean condition with individual listing notes.',
     },
     iconKey: 'laptop',
     useCaseIds: ['gaming', 'work-study', 'everyday'],
@@ -187,7 +190,7 @@ export const INITIAL_CATEGORIES: Category[] = [
   {
     id: 'keyboards',
     parentId: 'accessories',
-    name: { ar: 'لوحات المفاتيح (Keyboards)', en: 'Keyboards' },
+    name: { ar: 'كيبوردات Gaming / Office', en: 'Gaming / Office Keyboards' },
     description: {
       ar: 'اختر بين لوحات المفاتيح الميكانيكية للألعاب أو اللوحات الهادئة للعمل المكتبي.',
       en: 'Choose between mechanical gaming keyboards and whisper-quiet office keyboards.',
@@ -199,7 +202,7 @@ export const INITIAL_CATEGORIES: Category[] = [
   {
     id: 'mice',
     parentId: 'accessories',
-    name: { ar: 'الفأرات (Mice)', en: 'Mice' },
+    name: { ar: 'ماوسات احترافية', en: 'Professional Mice' },
     description: {
       ar: 'ماوسات ألعاب فائقة الخفة وماوسات مكتبية مريحة لليد.',
       en: 'Ultra-lightweight esports mice and ergonomic wireless office mice.',
@@ -211,7 +214,7 @@ export const INITIAL_CATEGORIES: Category[] = [
   {
     id: 'chargers-cables',
     parentId: 'accessories',
-    name: { ar: 'الشواحن والكابلات والمحولات', en: 'Chargers, Cables & Adapters' },
+    name: { ar: 'ملحقات وكابلات', en: 'Accessories, Chargers & Cables' },
     description: {
       ar: 'شواحن GaN سريعة، كابلات Type-C PD، وموزعات USB-C متعدّدة المنافذ.',
       en: 'GaN fast chargers, 100W Type-C cables, DisplayPort 1.4 cables, and USB-C hubs.',
@@ -368,6 +371,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'laptop-rog-front',
     secondaryImage: 'laptop-rog-side',
+    galleryImages: [
+      'laptop-rog-front',
+      'laptop-rog-side',
+      'laptop-rog-ports',
+      'laptop-rog-cooling',
+      'laptop-rog-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: true,
@@ -390,12 +400,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     id: 'prod-thinkpad-t14-used',
     sku: 'PXL-LAP-002',
     name: {
-      ar: 'لابتوب Lenovo ThinkPad T14 Gen 3 — حالة الوكالة',
+      ar: 'لابتوب Lenovo ThinkPad T14 Gen 3 — مستعمل نظيف',
       en: 'Lenovo ThinkPad T14 Gen 3 Business Laptop (Clean Used)',
     },
     description: {
-      ar: 'لابتوب عملي فائق المتانة للبرمجة والدراسة والعمل المكتبي، مفحوص بالكامل بنسبة بطارية ممتازة 92% ولوحة مفاتيح مريحة مقاومة للسوائل.',
-      en: 'Enterprise-grade durability for software engineering, university, and office workflows. Fully inspected with 92% battery health and backlit spill-resistant keyboard.',
+      ar: 'لابتوب عملي للبرمجة والدراسة والعمل المكتبي، بحالة مستعملة نظيفة ولوحة مفاتيح مريحة مقاومة للسوائل (بيانات منتج تجريبية).',
+      en: 'Durable business laptop for software engineering, university, and office workflows in clean pre-owned condition (sample listing data).',
     },
     categoryId: 'laptops',
     subcategoryId: 'used-laptops',
@@ -406,6 +416,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'laptop-thinkpad-front',
     secondaryImage: 'laptop-thinkpad-angle',
+    galleryImages: [
+      'laptop-thinkpad-front',
+      'laptop-thinkpad-angle',
+      'laptop-thinkpad-ports',
+      'laptop-thinkpad-cooling',
+      'laptop-thinkpad-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: true,
@@ -416,8 +433,8 @@ export const INITIAL_PRODUCTS: Product[] = [
       display: '14" WUXGA (1920×1200) IPS Anti-Glare 400 nits',
     },
     specs: [
-      { label: { ar: 'حالة الجهاز', en: 'Condition Grade' }, value: { ar: 'نظافة عالية جداً خالي من الخدوش العميقة', en: 'Clean A+ Grade, tested 100%' } },
-      { label: { ar: 'الوزن', en: 'Weight' }, value: { ar: '1.36 كغ فقط', en: '1.36 kg ultra-portable' } },
+      { label: { ar: 'حالة الجهاز', en: 'Condition Note' }, value: { ar: 'مستعمل بحالة نظيفة (بيانات معاينة تجريبية)', en: 'Clean pre-owned condition (sample demo note)' } },
+      { label: { ar: 'الوزن', en: 'Weight' }, value: { ar: '1.36 كغ تقريباً', en: 'Approx. 1.36 kg' } },
     ],
     createdAt: '2026-10-18T14:00:00Z',
   },
@@ -443,6 +460,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'laptop-loq-front',
     secondaryImage: 'laptop-loq-back',
+    galleryImages: [
+      'laptop-loq-front',
+      'laptop-loq-back',
+      'laptop-loq-ports',
+      'laptop-loq-cooling',
+      'laptop-loq-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: false,
@@ -479,6 +503,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'laptop-zephyrus-front',
     secondaryImage: 'laptop-zephyrus-lid',
+    galleryImages: [
+      'laptop-zephyrus-front',
+      'laptop-zephyrus-lid',
+      'laptop-zephyrus-ports',
+      'laptop-zephyrus-cooling',
+      'laptop-zephyrus-kit',
+    ],
     isBestSeller: false,
     isNewArrival: false,
     isFeatured: false,
@@ -515,6 +546,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'laptop-vivobook-front',
     secondaryImage: 'laptop-vivobook-side',
+    galleryImages: [
+      'laptop-vivobook-front',
+      'laptop-vivobook-side',
+      'laptop-vivobook-ports',
+      'laptop-vivobook-cooling',
+      'laptop-vivobook-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: false,
@@ -551,6 +589,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'kb-fizz-front',
     secondaryImage: 'kb-fizz-switches',
+    galleryImages: [
+      'kb-fizz-front',
+      'kb-fizz-switches',
+      'kb-fizz-keycaps',
+      'kb-fizz-profile',
+      'kb-fizz-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: true,
@@ -583,6 +628,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'kb-huntsman-front',
     secondaryImage: 'kb-huntsman-dial',
+    galleryImages: [
+      'kb-huntsman-front',
+      'kb-huntsman-dial',
+      'kb-huntsman-keycaps',
+      'kb-huntsman-profile',
+      'kb-huntsman-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: true,
@@ -614,6 +666,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'kb-mxkeys-front',
     secondaryImage: 'kb-mxkeys-side',
+    galleryImages: [
+      'kb-mxkeys-front',
+      'kb-mxkeys-side',
+      'kb-mxkeys-keycaps',
+      'kb-mxkeys-profile',
+      'kb-mxkeys-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: false,
@@ -645,6 +704,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'kb-pebble-front',
     secondaryImage: 'kb-pebble-angle',
+    galleryImages: [
+      'kb-pebble-front',
+      'kb-pebble-angle',
+      'kb-pebble-keycaps',
+      'kb-pebble-profile',
+      'kb-pebble-kit',
+    ],
     isBestSeller: false,
     isNewArrival: false,
     isFeatured: false,
@@ -675,6 +741,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'mouse-superlight-front',
     secondaryImage: 'mouse-superlight-side',
+    galleryImages: [
+      'mouse-superlight-front',
+      'mouse-superlight-side',
+      'mouse-superlight-sensor',
+      'mouse-superlight-grip',
+      'mouse-superlight-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: true,
@@ -706,6 +779,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'mouse-mxmaster-front',
     secondaryImage: 'mouse-mxmaster-wheel',
+    galleryImages: [
+      'mouse-mxmaster-front',
+      'mouse-mxmaster-wheel',
+      'mouse-mxmaster-sensor',
+      'mouse-mxmaster-grip',
+      'mouse-mxmaster-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: false,
@@ -737,6 +817,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'mouse-redragon-front',
     secondaryImage: 'mouse-redragon-bottom',
+    galleryImages: [
+      'mouse-redragon-front',
+      'mouse-redragon-bottom',
+      'mouse-redragon-sensor',
+      'mouse-redragon-grip',
+      'mouse-redragon-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: false,
@@ -767,6 +854,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'audio-cloud3-front',
     secondaryImage: 'audio-cloud3-mic',
+    galleryImages: [
+      'audio-cloud3-front',
+      'audio-cloud3-mic',
+      'audio-cloud3-driver',
+      'audio-cloud3-acoustic',
+      'audio-cloud3-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: true,
@@ -798,6 +892,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'audio-iem-front',
     secondaryImage: 'audio-iem-cable',
+    galleryImages: [
+      'audio-iem-front',
+      'audio-iem-cable',
+      'audio-iem-driver',
+      'audio-iem-acoustic',
+      'audio-iem-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: true,
@@ -829,6 +930,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'audio-earbuds-front',
     secondaryImage: 'audio-earbuds-case',
+    galleryImages: [
+      'audio-earbuds-front',
+      'audio-earbuds-case',
+      'audio-earbuds-driver',
+      'audio-earbuds-acoustic',
+      'audio-earbuds-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: false,
@@ -859,6 +967,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-gpu-front',
     secondaryImage: 'comp-gpu-backplate',
+    galleryImages: [
+      'comp-gpu-front',
+      'comp-gpu-backplate',
+      'comp-gpu-cooling',
+      'comp-gpu-pcb',
+      'comp-gpu-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: true,
@@ -890,6 +1005,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-cpu-front',
     secondaryImage: 'comp-cpu-chip',
+    galleryImages: [
+      'comp-cpu-front',
+      'comp-cpu-chip',
+      'comp-cpu-cooling',
+      'comp-cpu-pcb',
+      'comp-cpu-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: true,
@@ -921,6 +1043,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-mobo-front',
     secondaryImage: 'comp-mobo-io',
+    galleryImages: [
+      'comp-mobo-front',
+      'comp-mobo-io',
+      'comp-mobo-cooling',
+      'comp-mobo-pcb',
+      'comp-mobo-kit',
+    ],
     isBestSeller: false,
     isNewArrival: false,
     isFeatured: false,
@@ -951,6 +1080,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-ram-front',
     secondaryImage: 'comp-ram-rgb',
+    galleryImages: [
+      'comp-ram-front',
+      'comp-ram-rgb',
+      'comp-ram-cooling',
+      'comp-ram-pcb',
+      'comp-ram-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: false,
@@ -981,6 +1117,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-ssd-front',
     secondaryImage: 'comp-ssd-installed',
+    galleryImages: [
+      'comp-ssd-front',
+      'comp-ssd-installed',
+      'comp-ssd-cooling',
+      'comp-ssd-pcb',
+      'comp-ssd-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: false,
@@ -1011,6 +1154,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-psu-front',
     secondaryImage: 'comp-psu-cables',
+    galleryImages: [
+      'comp-psu-front',
+      'comp-psu-cables',
+      'comp-psu-cooling',
+      'comp-psu-pcb',
+      'comp-psu-kit',
+    ],
     isBestSeller: false,
     isNewArrival: false,
     isFeatured: false,
@@ -1041,6 +1191,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'comp-case-front',
     secondaryImage: 'comp-case-interior',
+    galleryImages: [
+      'comp-case-front',
+      'comp-case-interior',
+      'comp-case-cooling',
+      'comp-case-pcb',
+      'comp-case-kit',
+    ],
     isBestSeller: false,
     isNewArrival: true,
     isFeatured: false,
@@ -1071,6 +1228,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'IN_STOCK',
     primaryImage: 'acc-charger-front',
     secondaryImage: 'acc-charger-ports',
+    galleryImages: [
+      'acc-charger-front',
+      'acc-charger-ports',
+      'acc-charger-cooling',
+      'acc-charger-pcb',
+      'acc-charger-kit',
+    ],
     isBestSeller: true,
     isNewArrival: false,
     isFeatured: false,
@@ -1100,6 +1264,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     availability: 'ON_REQUEST',
     primaryImage: 'build-nebula-front',
     secondaryImage: 'build-nebula-angle',
+    galleryImages: [
+      'build-nebula-front',
+      'build-nebula-angle',
+      'build-nebula-cooling',
+      'build-nebula-pcb',
+      'build-nebula-kit',
+    ],
     isBestSeller: true,
     isNewArrival: true,
     isFeatured: true,
@@ -1248,5 +1419,248 @@ export const INITIAL_CUSTOMER_REQUESTS: CustomerRequest[] = [
     note: 'يرجى التأكيد أن الحروف العربية محفورة بالليزر باللون الرمادي الداكن.',
     createdAt: '2026-10-25T14:40:00Z',
     status: 'COMPLETED',
+  },
+];
+
+export const INITIAL_SERVICES: StoreService[] = [
+  {
+    id: 'service-cooling',
+    slug: 'cooling-solutions',
+    title: {
+      ar: 'حلول التبريد الاحترافية',
+      en: 'Professional Cooling & Thermal Solutions',
+    },
+    subtitle: {
+      ar: 'تنظيف منظومة التبريد وتجديد المعاجين الحرارية للحد من ارتفاع الحرارة والحفاظ على استقرار الأداء',
+      en: 'Cooling system cleaning and thermal interface renewal to help manage operating temperatures and sustain stable performance',
+    },
+    description: {
+      ar: 'خدمة صيانة فنية لمعالجة تراكم الغبار وجفاف المعجون الحراري في أجهزة اللابتوب وتجميعات الكمبيوتر المكتبية، مع معاينة درجات الحرارة واستقرار التردد قبل وبعد الصيانة.',
+      en: 'Technical maintenance service addressing dust buildup and dried thermal compound in laptops and desktop PCs, including pre- and post-service thermal and stability checks.',
+    },
+    iconKey: 'cooling',
+    badge: {
+      ar: 'خدمة صيانة وتبريد متخصصة',
+      en: 'Specialized Thermal Maintenance',
+    },
+    turnaroundNote: {
+      ar: 'المدة التقديرية: تُحدد بعد معاينة الجهاز (بيانات تجريبية)',
+      en: 'Estimated turnaround: Confirmed upon device assessment (Demo)',
+    },
+    isActive: true,
+    isFeatured: true,
+    showInNavbarShortcut: true,
+    highlights: [
+      {
+        title: {
+          ar: '1. تجديد المعجون والوسائد الحرارية (Thermal Paste & Pads Renewal)',
+          en: '1. Thermal Paste & Pads Renewal',
+        },
+        description: {
+          ar: 'استبدال المعجون الحراري الجاف والوسائد الحرارية التالفة بمواد تبريد مناسبة لطبيعة الجهاز ودوائر الطاقة وذواكر كرت الشاشة.',
+          en: 'Replacement of dried thermal paste and worn thermal pads with appropriate thermal interface materials for CPU, GPU, and VRM zones.',
+        },
+      },
+      {
+        title: {
+          ar: '2. تنظيف المشتتات الحرارية والمراوح (Heatsink & Fan Cleaning)',
+          en: '2. Heatsink Fin & Fan Cleaning',
+        },
+        description: {
+          ar: 'فك وإزالة التراكمات الغبارية من زعانف المشتت والمراوح وتحسين مسار تدفق الهواء (Airflow) داخل اللابتوب أو الكيس.',
+          en: 'Clearing accumulated dust from vents, heatsink fins, and fan blades to restore proper internal chassis airflow.',
+        },
+      },
+      {
+        title: {
+          ar: '3. معاينة الحرارة واستقرار الأداء قبل وبعد الصيانة (Pre & Post Thermal Check)',
+          en: '3. Pre & Post Thermal & Stability Assessment',
+        },
+        description: {
+          ar: 'معاينة درجات حرارة المعالج CPU وكرت الشاشة GPU واستقرار التردد تحت ضغط التشغيل قبل البدء وبعد الانتهاء للتحقق من كفاءة التبريد.',
+          en: 'Checking CPU/GPU load temperatures, fan behavior, and clock stability before and after servicing.',
+        },
+      },
+    ],
+    checklist: [
+      {
+        ar: 'معاينة أولية لحالة المراوح ومسارات التهوية',
+        en: 'Initial assessment of fan operation and airflow paths',
+      },
+      {
+        ar: 'تنظيف آمن للمكونات الداخلية والمنافذ بمواد مخصصة للإلكترونيات',
+        en: 'ESD-safe internal board and port cleaning',
+      },
+      {
+        ar: 'ملخص مقارنة توضيحي لحالة التبريد قبل وبعد الصيانة',
+        en: 'Before/After thermal maintenance status summary',
+      },
+    ],
+    thermalBenchmark: {
+      deviceModel: {
+        ar: 'نموذج توضيحي لمعاينة الصيانة الحرارية (بيانات تجريبية — تختلف النتائج حسب حالة كل جهاز)',
+        en: 'Illustrative Thermal Servicing Overview (Sample Demo Data — Actual results vary by device condition)',
+      },
+      beforeTempC: 88,
+      afterTempC: 76,
+      sustainedClockBefore: 'Unstable / Throttling Risk',
+      sustainedClockAfter: 'Balanced & Consistent Load',
+      fanNoiseBefore: {
+        ar: 'ارتفاع صوت المراوح بسبب انسداد مجاري الهواء وجفاف المعجون',
+        en: 'Elevated fan effort caused by dust buildup and dried compound',
+      },
+      fanNoiseAfter: {
+        ar: 'تحسن تدفق الهواء وانتظام عمل المراوح بعد التنظيف والتجديد',
+        en: 'Restored airflow and smoother fan behavior after servicing',
+      },
+    },
+  },
+  {
+    id: 'service-maintenance',
+    slug: 'hardware-maintenance',
+    title: {
+      ar: 'صيانة اللابتوبات والـ PC وفحص الأعطال',
+      en: 'Hardware Maintenance, Upgrades & Diagnostics',
+    },
+    subtitle: {
+      ar: 'فحص شامل للأعطال، ترقية الذواكر ووحدات التخزين، وتجميع الكيسات الاحترافية مع إدارة كابلات نظيفة',
+      en: 'Complete hardware diagnostics, RAM/NVMe upgrades, BIOS tuning, and custom PC assembly with clean cable management',
+    },
+    description: {
+      ar: 'فريق تقني متخصص في تشخيص أعطال الهاردوير، ترقية اللابتوبات والكمبيوترات المكتبية، وتهيئة أنظمة التشغيل والتعريفات الرسمية لضمان استقرار الأداء في الألعاب وبرامج العمل.',
+      en: 'Hardware diagnostics, memory and storage upgrades, BIOS/EXPO configuration, and clean OS/driver setup for gaming and workstation systems.',
+    },
+    iconKey: 'maintenance',
+    badge: {
+      ar: 'صيانة وفحص فني',
+      en: 'Hardware Diagnostics & Upgrades',
+    },
+    turnaroundNote: {
+      ar: 'المدة التقديرية: تُحدد حسب نوع الفحص أو الترقية (بيانات تجريبية)',
+      en: 'Estimated turnaround: Determined by diagnostic or upgrade scope (Demo)',
+    },
+    isActive: true,
+    isFeatured: true,
+    showInNavbarShortcut: false,
+    highlights: [
+      {
+        title: {
+          ar: '1. تشخيص أعطال الهاردوير واستبدال القطع التالفة',
+          en: '1. Component Diagnostics & Part Replacement',
+        },
+        description: {
+          ar: 'فحص دقيق للوحات الأم، الشاشات، الكيبوردات، المفاصل، البطاريات، ومزودات الطاقة لتحديد سبب العطل بدقة.',
+          en: 'Structured testing for motherboards, laptop panels, keyboards, hinges, batteries, and power supplies.',
+        },
+      },
+      {
+        title: {
+          ar: '2. ترقية الرامات، أقراص NVMe SSD، وكروت الشاشة',
+          en: '2. DDR4/DDR5 RAM, NVMe SSD & GPU Upgrades',
+        },
+        description: {
+          ar: 'اختيار القطع المتوافقة مع جهازك وتركيبها مع نقل النظام والبيانات بأمان وتفعيل إعدادات XMP / EXPO.',
+          en: 'Compatibility-checked upgrades with safe data migration and memory profile configuration.',
+        },
+      },
+      {
+        title: {
+          ar: '3. تجميعات PC مخصصة وإدارة كابلات احترافية',
+          en: '3. Custom PC Assembly, Cable Routing & BIOS Setup',
+        },
+        description: {
+          ar: 'تجميع قطع الكمبيوتر مع تنظيم كابلات مرتب، تحديث الـ BIOS لأحدث إصدار مستقر، واختبار استقرار الجهاز.',
+          en: 'Clean custom rig assembly, organized cable routing, BIOS update, and stability verification.',
+        },
+      },
+    ],
+    checklist: [
+      {
+        ar: 'التحقق من توافقية القطع قبل التركيب أو الترقية',
+        en: 'Part compatibility verification prior to upgrade',
+      },
+      {
+        ar: 'نسخ احتياطي آمن للبيانات عند ترقية وحدات التخزين',
+        en: 'Safe data migration during SSD/NVMe storage upgrades',
+      },
+      {
+        ar: 'ضبط منحنيات المراوح (Fan Curves) وتحديث التعريفات الرسمية',
+        en: 'Custom BIOS fan curves and official chipset/GPU drivers',
+      },
+    ],
+  },
+  {
+    id: 'service-cameras',
+    slug: 'security-cameras',
+    title: {
+      ar: 'حلول الكاميرات وأنظمة المراقبة',
+      en: 'Security Cameras & Surveillance Solutions',
+    },
+    subtitle: {
+      ar: 'توريد وتركيب وبرمجة أنظمة المراقبة الشبكية IP و CCTV للمتاجر والشركات والمنازل مع ربط بالهاتف',
+      en: 'Supply, installation, and configuration of IP & HD CCTV surveillance systems for retail, offices, and homes with mobile monitoring',
+    },
+    description: {
+      ar: 'حلول مراقبة أمنية متكاملة تشمل معاينة الموقع، اختيار الكاميرات المناسبة (ليلية / خارجية / داخلية)، تمديد الشبكات، وبرمجة أجهزة التسجيل NVR/DVR مع المتابعة عن بُعد.',
+      en: 'Security surveillance solutions including site evaluation, indoor/outdoor IP & CCTV cameras, cabling, NVR/DVR storage setup, and mobile viewing.',
+    },
+    iconKey: 'cameras',
+    badge: {
+      ar: 'أنظمة مراقبة وتجهيز فني',
+      en: 'Surveillance Systems Setup',
+    },
+    turnaroundNote: {
+      ar: 'المدة التقديرية: تُحدد حسب متطلبات الموقع وعدد النقاط (بيانات تجريبية)',
+      en: 'Estimated timeline: Determined by site scope and camera count (Demo)',
+    },
+    isActive: true,
+    isFeatured: true,
+    showInNavbarShortcut: false,
+    highlights: [
+      {
+        title: {
+          ar: '1. كاميرات مراقبة بدقة عالية (IP & Analog HD) ورؤية ليلية واضحة',
+          en: '1. High-Resolution IP & HD Cameras with Night Vision',
+        },
+        description: {
+          ar: 'خيارات متعددة من الكاميرات الداخلية والخارجية المخصصة لمختلف ظروف الإضاءة والعوامل الجوية.',
+          en: 'Indoor dome and weatherproof outdoor bullet cameras with motion detection and clear night imaging.',
+        },
+      },
+      {
+        title: {
+          ar: '2. تجهيز أجهزة التسجيل NVR / DVR وأقراص التخزين المخصصة للمراقبة',
+          en: '2. NVR / DVR Recorders & Surveillance Storage',
+        },
+        description: {
+          ar: 'تركيب أقراص تخزين مخصصة لأنظمة المراقبة مع ضبط إعدادات التسجيل والأرشفة التلقائية.',
+          en: 'Surveillance-grade HDD configuration tailored to your required recording retention window.',
+        },
+      },
+      {
+        title: {
+          ar: '3. الربط وتطبيقات المراقبة عبر الموبايل والكمبيوتر',
+          en: '3. Remote Mobile App & Desktop Monitoring Setup',
+        },
+        description: {
+          ar: 'إعداد المشاهدة المباشرة واسترجاع التسجيلات والتنبيهات على الهواتف الذكية وأجهزة الكمبيوتر.',
+          en: 'Live view, playback, and alert configuration across iOS, Android, and desktop devices.',
+        },
+      },
+    ],
+    checklist: [
+      {
+        ar: 'تحديد نقاط التغطية المناسبة لتقليل الزوايا غير المرئية',
+        en: 'Camera placement planning for balanced site coverage',
+      },
+      {
+        ar: 'تمديد كابلات مرتب وحماية التوصيلات الكهربائية والشبكية',
+        en: 'Organized conduit cabling and protected power/PoE junctions',
+      },
+      {
+        ar: 'شرح طريقة استخدام التطبيق واستخراج المقاطع المسجلة',
+        en: 'Walkthrough on mobile app usage and video clip export',
+      },
+    ],
   },
 ];

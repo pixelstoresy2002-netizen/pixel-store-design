@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,8 +9,9 @@ import {
   MemoryStick,
   MessageCircle,
   Monitor,
-  ShieldCheck,
   Sparkles,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import {
   Brand,
@@ -22,6 +25,7 @@ import {
 import {
   formatSyp,
   formatUsd,
+  getProductGalleryImages,
   resolveProductPricing,
 } from '../../utils/storeLogic';
 import { ProductVisual } from '../visuals/ProductVisual';
@@ -65,7 +69,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   onSelectProduct,
   onRequestProduct,
 }) => {
-  const [selectedImageIdx, setSelectedImageIdx] = useState<0 | 1>(0);
+  const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
+  const [isZoomActive, setIsZoomActive] = useState(false);
+  const [zoomCoords, setZoomCoords] = useState<{ x: number; y: number }>({
+    x: 50,
+    y: 50,
+  });
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   const brand = brands.find((b) => b.id === product.brandId);
   const category = categories.find((c) => c.id === product.categoryId);
@@ -76,8 +86,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     product.useCaseIds.includes(u.id)
   );
 
-  const galleryKeys = [product.primaryImage, product.secondaryImage];
-  const activeVisualKey = galleryKeys[selectedImageIdx] ?? product.primaryImage;
+  const galleryKeys = getProductGalleryImages(product);
+  const safeSelectedIdx =
+    selectedImageIdx >= 0 && selectedImageIdx < galleryKeys.length
+      ? selectedImageIdx
+      : 0;
+  const activeVisualKey = galleryKeys[safeSelectedIdx] ?? product.primaryImage;
 
   const relatedProducts = allProducts
     .filter(
@@ -90,8 +104,22 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
   const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft;
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imageContainerRef.current) return;
+    const rect = imageContainerRef.current.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const rawX = ((e.clientX - rect.left) / rect.width) * 100;
+    const rawY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const clampedX = Math.max(8, Math.min(92, rawX));
+    const clampedY = Math.max(8, Math.min(92, rawY));
+
+    setZoomCoords({ x: clampedX, y: clampedY });
+  };
+
   return (
-    <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-6 space-y-8">
+    <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-5 space-y-7">
       {/* Breadcrumb & Back Link */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <nav
@@ -101,7 +129,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
           <button
             type="button"
             onClick={() => onNavigate('home')}
-            className="hover:text-[#8E4DEB]"
+            className="hover:text-[#8E4DEB] font-semibold"
           >
             {lang === 'ar' ? 'الرئيسية' : 'Home'}
           </button>
@@ -111,7 +139,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('category', category.id)}
-                className="hover:text-[#8E4DEB]"
+                className="hover:text-[#8E4DEB] font-semibold"
               >
                 {category.name[lang]}
               </button>
@@ -125,14 +153,14 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 onClick={() =>
                   onNavigate('category', category?.id ?? 'ALL', subcategory.id)
                 }
-                className="hover:text-[#8E4DEB]"
+                className="hover:text-[#8E4DEB] font-semibold"
               >
                 {subcategory.name[lang]}
               </button>
               <span>/</span>
             </>
           )}
-          <span className="font-semibold text-[#111318] truncate max-w-xs">
+          <span className="font-bold text-[#111318] truncate max-w-xs">
             {product.name[lang]}
           </span>
         </nav>
@@ -154,63 +182,150 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       </div>
 
       {/* Main Product Showcase Module */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-5 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left: Product Image Gallery (5 Columns) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="relative aspect-[4/3] w-full rounded-xl bg-[#F8F7FA] border border-slate-200/80 overflow-hidden">
-            <ProductVisual
-              visualKey={activeVisualKey}
-              alt={product.name[lang]}
-            />
-            {pricing.hasActiveOffer && (
-              <span className="absolute top-3 start-3 px-2.5 py-1 rounded bg-[#D66C9D] text-white text-xs font-bold">
+      <div
+        className={`bg-white p-5 lg:p-7 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start ${
+          themeId === 'contrast'
+            ? 'rounded-none border-2 border-[#111318]'
+            : 'rounded-xl border border-slate-200/90'
+        }`}
+      >
+        {/* Left/Right: Product Image Gallery with Contained In-Image Zoom (5 Columns — Never Overlaps Info Column) */}
+        <div className="lg:col-span-5 space-y-3 relative">
+          <div
+            ref={imageContainerRef}
+            data-testid="pdp-main-image-container"
+            data-zoom-active={isZoomActive ? 'true' : 'false'}
+            onMouseEnter={() => setIsZoomActive(true)}
+            onMouseLeave={() => {
+              setIsZoomActive(false);
+              setZoomCoords({ x: 50, y: 50 });
+            }}
+            onMouseMove={handleMouseMove}
+            onClick={() => setIsZoomActive((prev) => !prev)}
+            className={`relative aspect-[4/3] w-full rounded-xl bg-[#F8F7FA] border-2 transition-colors overflow-hidden select-none ${
+              isZoomActive
+                ? 'border-[#8E4DEB] cursor-zoom-out'
+                : 'border-slate-200/90 cursor-zoom-in'
+            }`}
+          >
+            <div
+              data-testid="pdp-zoom-stage"
+              className="w-full h-full transition-transform duration-100 ease-out will-change-transform"
+              style={{
+                transformOrigin: `${zoomCoords.x}% ${zoomCoords.y}%`,
+                transform: isZoomActive ? 'scale(2.15)' : 'scale(1)',
+              }}
+            >
+              <ProductVisual
+                visualKey={activeVisualKey}
+                alt={product.name[lang]}
+              />
+            </div>
+
+            {pricing.hasActiveOffer && !isZoomActive && (
+              <span className="absolute top-3 start-3 px-2.5 py-1 rounded bg-[#D66C9D] text-white text-xs font-bold z-10 pointer-events-none">
                 {lang === 'ar'
                   ? `خصم حصري ${pricing.discountPercent}%`
                   : `Save ${pricing.discountPercent}%`}
               </span>
             )}
+
+            {/* Contained Active Zoom Coordinate Readout (Inside Image Frame Only) */}
+            {isZoomActive && (
+              <div
+                data-testid="pdp-zoom-indicator"
+                className="absolute bottom-3 start-3 px-2.5 py-1 rounded bg-[#111318]/90 text-white text-[11px] font-mono-num font-bold flex items-center gap-1.5 z-20 pointer-events-none"
+              >
+                <span className="text-[#EF875D]">2.15× ZOOM</span>
+                <span>·</span>
+                <span>
+                  {Math.round(zoomCoords.x)}% , {Math.round(zoomCoords.y)}%
+                </span>
+              </div>
+            )}
+
+            {/* Accessible Zoom Toggle Control (Keyboard & Touch Support) */}
+            <button
+              type="button"
+              data-testid="pdp-zoom-toggle-btn"
+              aria-pressed={isZoomActive}
+              aria-label={
+                isZoomActive
+                  ? lang === 'ar'
+                    ? 'إلغاء تكبير الصورة'
+                    : 'Reset image zoom'
+                  : lang === 'ar'
+                  ? 'تكبير صورة المنتج'
+                  : 'Magnify product image'
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsZoomActive((prev) => !prev);
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#111318]/85 hover:bg-[#8E4DEB] text-white text-[11px] font-semibold absolute bottom-3 end-3 z-20 transition-colors cursor-pointer"
+            >
+              {isZoomActive ? (
+                <>
+                  <ZoomOut className="w-3.5 h-3.5 text-[#EF875D]" />
+                  <span>{lang === 'ar' ? 'إغلاق التكبير' : 'Reset Zoom'}</span>
+                </>
+              ) : (
+                <>
+                  <ZoomIn className="w-3.5 h-3.5 text-[#EF875D]" />
+                  <span>
+                    {lang === 'ar'
+                      ? 'مرر أو اضغط للتكبير'
+                      : 'Hover or click to zoom'}
+                  </span>
+                </>
+              )}
+            </button>
           </div>
 
-          {/* Image Thumbnails */}
-          <div className="flex items-center gap-3">
-            {galleryKeys.map((vKey, idx) => {
-              const isSelected = selectedImageIdx === idx;
-              return (
-                <button
-                  key={vKey}
-                  type="button"
-                  onClick={() => setSelectedImageIdx(idx as 0 | 1)}
-                  aria-label={
-                    lang === 'ar'
-                      ? `صورة المنتج ${idx + 1}`
-                      : `Product Angle ${idx + 1}`
-                  }
-                  className={`w-24 aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                    isSelected
-                      ? 'border-[#8E4DEB] ring-2 ring-[#8E4DEB]/20'
-                      : 'border-slate-200 opacity-75 hover:opacity-100'
-                  }`}
-                >
-                  <ProductVisual
-                    visualKey={vKey}
-                    alt={`${product.name[lang]} thumbnail ${idx + 1}`}
-                  />
-                </button>
-              );
-            })}
-            <div className="text-xs text-slate-400 ps-2">
-              {selectedImageIdx === 0
-                ? lang === 'ar'
-                  ? 'الواجهة الأمامية (1/2)'
-                  : 'Primary Studio Angle (1/2)'
-                : lang === 'ar'
-                ? 'زاوية التفصيل والمنفذ (2/2)'
-                : 'Secondary Detail Angle (2/2)'}
+          {/* Image Thumbnails (Up to 5 Gallery Angles) */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
+              {galleryKeys.map((vKey, idx) => {
+                const isSelected = safeSelectedIdx === idx;
+                return (
+                  <button
+                    key={`${vKey}-${idx}`}
+                    type="button"
+                    data-testid={`pdp-thumbnail-${idx}`}
+                    onClick={() => setSelectedImageIdx(idx)}
+                    aria-label={
+                      lang === 'ar'
+                        ? `صورة المنتج ${idx + 1}`
+                        : `Product Angle ${idx + 1}`
+                    }
+                    className={`w-full aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-[#8E4DEB] ring-2 ring-[#8E4DEB]/20'
+                        : 'border-slate-200 opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <ProductVisual
+                      visualKey={vKey}
+                      alt={`${product.name[lang]} thumbnail ${idx + 1}`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-0.5">
+              <span>
+                {lang === 'ar'
+                  ? `زاوية العرض (${safeSelectedIdx + 1}/${galleryKeys.length})`
+                  : `Studio Gallery Angle (${safeSelectedIdx + 1}/${galleryKeys.length})`}
+              </span>
+              <span className="font-mono-num text-[11px] text-[#8E4DEB] font-bold">
+                {safeSelectedIdx + 1} / {galleryKeys.length}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Right: Contiguous Purchase / Request & Specification Module (7 Columns) */}
+        {/* Contiguous Purchase / Request & Specification Module (7 Columns) */}
         <div className="lg:col-span-7 space-y-5">
           {/* Unboxed Metadata Header: Brand · SKU · Condition · Availability */}
           <div className="flex items-center flex-wrap gap-2 text-xs text-slate-500">
@@ -262,7 +377,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
           </div>
 
           {/* Product Title */}
-          <h1 className="text-xl sm:text-2xl font-bold text-[#111318] leading-snug">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#111318] leading-snug">
             {product.name[lang]}
           </h1>
 
@@ -328,10 +443,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   {lang === 'ar' ? 'اطلب الآن (Request Now)' : 'Request Now'}
                 </span>
               </button>
-              <span className="text-[11px] text-slate-500">
+              <span
+                data-testid="pdp-request-helper-note"
+                className="text-[11px] text-slate-500"
+              >
                 {lang === 'ar'
-                  ? 'حجز وتأكيد مباشر عبر واتساب بدون تعقيد'
-                  : 'Direct reservation & follow-up via WhatsApp'}
+                  ? 'أرسل طلبك وسيتواصل معك المتجر عبر واتساب.'
+                  : 'Submit your request and the store will contact you via WhatsApp.'}
               </span>
             </div>
           </div>
@@ -341,7 +459,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             {product.description[lang]}
           </p>
 
-          {/* Lightweight 4-Field Laptop Specifications (Requirement #12.D) */}
+          {/* Lightweight 4-Field Laptop Specifications */}
           {product.laptopSpecs && (
             <div className="space-y-2.5">
               <h2 className="text-xs font-bold text-[#111318] uppercase tracking-wider">
@@ -356,7 +474,10 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     <div className="text-[11px] text-slate-500">
                       {lang === 'ar' ? 'المعالج (Processor)' : 'Processor'}
                     </div>
-                    <div className="text-xs font-bold text-[#111318] mt-0.5" dir="ltr">
+                    <div
+                      className="text-xs font-bold text-[#111318] mt-0.5"
+                      dir="ltr"
+                    >
                       {product.laptopSpecs.processor}
                     </div>
                   </div>
@@ -366,9 +487,14 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   <MemoryStick className="w-4 h-4 text-[#D66C9D] shrink-0 mt-0.5" />
                   <div>
                     <div className="text-[11px] text-slate-500">
-                      {lang === 'ar' ? 'الذاكرة العشوائية (Memory)' : 'Memory (RAM)'}
+                      {lang === 'ar'
+                        ? 'الذاكرة العشوائية (Memory)'
+                        : 'Memory (RAM)'}
                     </div>
-                    <div className="text-xs font-bold text-[#111318] mt-0.5" dir="ltr">
+                    <div
+                      className="text-xs font-bold text-[#111318] mt-0.5"
+                      dir="ltr"
+                    >
                       {product.laptopSpecs.memory}
                     </div>
                   </div>
@@ -380,7 +506,10 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     <div className="text-[11px] text-slate-500">
                       {lang === 'ar' ? 'التخزين (Storage)' : 'Storage'}
                     </div>
-                    <div className="text-xs font-bold text-[#111318] mt-0.5" dir="ltr">
+                    <div
+                      className="text-xs font-bold text-[#111318] mt-0.5"
+                      dir="ltr"
+                    >
                       {product.laptopSpecs.storage}
                     </div>
                   </div>
@@ -392,7 +521,10 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     <div className="text-[11px] text-slate-500">
                       {lang === 'ar' ? 'الشاشة (Display)' : 'Display'}
                     </div>
-                    <div className="text-xs font-bold text-[#111318] mt-0.5" dir="ltr">
+                    <div
+                      className="text-xs font-bold text-[#111318] mt-0.5"
+                      dir="ltr"
+                    >
                       {product.laptopSpecs.display}
                     </div>
                   </div>

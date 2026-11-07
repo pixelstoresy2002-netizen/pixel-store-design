@@ -1,9 +1,9 @@
-import {
+import type {
   FilterState,
   Language,
   Offer,
   Product,
-} from '../types/store';
+} from '../types/store.ts';
 
 /**
  * Converts a USD price to Syrian Pounds (SYP) using the global Admin exchange rate.
@@ -266,93 +266,156 @@ export function filterAndSortProducts(
   });
 }
 
-export const DEFAULT_THEME_ID = 'hybrid' as const;
-export const DEFAULT_ARABIC_FONT_ID = 'tajawal' as const;
+export const DEFAULT_THEME_ID = 'contrast' as const;
+export const DEFAULT_ARABIC_FONT_ID = 'cairo' as const;
+export const HERO_AUTOPLAY_INTERVAL_MS = 5500;
+export const GALLERY_HOVER_INTERVAL_MS = 1000;
+export const MAX_PRODUCT_GALLERY_IMAGES = 5;
 
-export const ARABIC_FONT_OPTIONS = [
-  {
-    id: 'tajawal' as const,
-    name: 'Tajawal',
-    labelAr: 'تجوال (الافتراضي)',
-    labelEn: 'Tajawal (Default)',
-    cssFamily: "'Tajawal', sans-serif",
-    previewClass: 'font-preview-tajawal',
-  },
-  {
-    id: 'readex' as const,
-    name: 'Readex Pro',
-    labelAr: 'ريدكس برو (Readex Pro)',
-    labelEn: 'Readex Pro',
-    cssFamily: "'Readex Pro', sans-serif",
-    previewClass: 'font-preview-readex',
-  },
-  {
-    id: 'ibm' as const,
-    name: 'IBM Plex Sans Arabic',
-    labelAr: 'آي بي إم بليكس (IBM Plex)',
-    labelEn: 'IBM Plex Sans Arabic',
-    cssFamily: "'IBM Plex Sans Arabic', sans-serif",
-    previewClass: 'font-preview-ibm',
-  },
-  {
-    id: 'alexandria' as const,
-    name: 'Alexandria',
-    labelAr: 'الإسكندرية (Alexandria)',
-    labelEn: 'Alexandria',
-    cssFamily: "'Alexandria', sans-serif",
-    previewClass: 'font-preview-alexandria',
-  },
-  {
-    id: 'almarai' as const,
-    name: 'Almarai',
-    labelAr: 'المراعي (Almarai)',
-    labelEn: 'Almarai',
-    cssFamily: "'Almarai', sans-serif",
-    previewClass: 'font-preview-almarai',
-  },
-  {
-    id: 'cairo' as const,
-    name: 'Cairo',
-    labelAr: 'كايرو (Cairo)',
-    labelEn: 'Cairo',
-    cssFamily: "'Cairo', sans-serif",
-    previewClass: 'font-preview-cairo',
-  },
-];
+export const OFFICIAL_PRIMARY_PHONE_DISPLAY = '+963 933 811 106';
+export const OFFICIAL_PRIMARY_PHONE_TEL = 'tel:+963933811106';
 
-export const DESIGN_THEME_OPTIONS = [
-  {
-    id: 'hybrid' as const,
-    nameEn: 'Original Hybrid',
-    nameAr: 'الهجين الأصلي (Original Hybrid)',
-    descAr: 'واجهة فاتحة متوازنة مع أقسام عروض داكنة وهوية بنفسجية واضحة',
-    descEn: 'Balanced light storefront with dark exclusive-offers contrast and purple identity',
-  },
-  {
-    id: 'contrast' as const,
-    nameEn: 'Pixel Contrast',
-    nameAr: 'تباين بيكسل (Pixel Contrast)',
-    descAr: 'ترويسة ومنطقة عروض داكنة بلمسات Pixel تقنية وتباين بصري أقوى',
-    descEn: 'Dark ink header & hero region, asymmetric promo layouts, and crisp pixel-tech accents',
-  },
-  {
-    id: 'retail' as const,
-    nameEn: 'Retail Focus',
-    nameAr: 'التركيز التجاري (Retail Focus)',
-    descAr: 'تخطيط تجاري عالي الكثافة يركز على سرعة استكشاف المنتجات والعروض',
-    descEn: 'High-efficiency commercial catalog layout with Coral promo highlights and dense discovery',
-  },
-];
-
-export function formatDesignSelectionSummary(
-  themeId: 'hybrid' | 'contrast' | 'retail',
-  fontId: 'tajawal' | 'readex' | 'ibm' | 'alexandria' | 'almarai' | 'cairo'
-): string {
-  const theme =
-    DESIGN_THEME_OPTIONS.find((t) => t.id === themeId) ??
-    DESIGN_THEME_OPTIONS[0];
-  const font =
-    ARABIC_FONT_OPTIONS.find((f) => f.id === fontId) ?? ARABIC_FONT_OPTIONS[0];
-  return `Theme: ${theme.nameEn} | Font: ${font.name}`;
+/**
+ * Formats a display phone string into a clean tel: URI (e.g., "+963 933 811 106" -> "tel:+963933811106").
+ */
+export function formatPhoneTelHref(rawPhone: string): string {
+  const cleaned = (rawPhone || '').replace(/[^+\d]/g, '');
+  return `tel:${cleaned}`;
 }
+
+/**
+ * Returns up to 5 unique, non-empty gallery visual keys for a product.
+ * Always preserves primaryImage as index 0 and never duplicates identical visual keys.
+ */
+export function getProductGalleryImages(
+  product: Pick<Product, 'primaryImage' | 'secondaryImage' | 'galleryImages'>
+): string[] {
+  const candidates = [
+    product.primaryImage,
+    ...(product.galleryImages && product.galleryImages.length > 0
+      ? product.galleryImages
+      : [product.secondaryImage]),
+    product.secondaryImage,
+  ];
+  const unique: string[] = [];
+  for (const item of candidates) {
+    const trimmed = (item || '').trim();
+    if (trimmed && !unique.includes(trimmed)) {
+      unique.push(trimmed);
+      if (unique.length >= MAX_PRODUCT_GALLERY_IMAGES) {
+        break;
+      }
+    }
+  }
+  return unique;
+}
+
+/**
+ * Calculates the next cyclic gallery image index during pointer hover.
+ * Cycles 0 -> 1 -> 2 -> 3 -> 4 -> 0 when 5 images are available.
+ */
+export function getNextGalleryImageIndex(
+  currentIndex: number,
+  totalImages: number
+): number {
+  if (totalImages <= 1) return 0;
+  return (currentIndex + 1) % totalImages;
+}
+
+/**
+ * Calculates the next cyclic slide index for the 5-slide hero carousel.
+ */
+export function getNextHeroSlideIndex(
+  currentIndex: number,
+  totalSlides: number,
+  direction: 'next' | 'prev' = 'next'
+): number {
+  if (totalSlides <= 0) return 0;
+  if (direction === 'prev') {
+    return (currentIndex - 1 + totalSlides) % totalSlides;
+  }
+  return (currentIndex + 1) % totalSlides;
+}
+
+/**
+ * Checks whether a configured phone number is a real, verified number rather than a demo placeholder.
+ */
+export function isPhoneLinkVerified(rawPhone?: string): boolean {
+  if (!rawPhone) return false;
+  const trimmed = rawPhone.trim();
+  if (!trimmed || /x/i.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 8) return false;
+  if (
+    digits.endsWith('000000') ||
+    digits === '963944000111' ||
+    digits === '963955000222'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Checks whether a configured WhatsApp number is a real, verified number rather than a demo placeholder.
+ */
+export function isWhatsappLinkVerified(rawWhatsapp?: string): boolean {
+  return isPhoneLinkVerified(rawWhatsapp);
+}
+
+/**
+ * Normalizes a social handle or URL into an full https URL.
+ */
+export function normalizeChannelUrl(raw: string, prefixUrl: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return prefixUrl;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  const cleanHandle = trimmed
+    .replace(/^@/, '')
+    .replace(/^(t\.me\/|fb\.com\/|facebook\.com\/|instagram\.com\/)/i, '');
+  return `${prefixUrl}${cleanHandle}`;
+}
+
+/**
+ * Checks whether a social/map URL or handle points to a specific configured destination
+ * rather than a bare generic homepage or placeholder.
+ */
+export function isExternalChannelVerified(rawValue?: string): boolean {
+  if (!rawValue) return false;
+  const trimmed = rawValue.trim();
+  if (!trimmed || trimmed === '#' || /xxx|placeholder|example/i.test(trimmed)) {
+    return false;
+  }
+
+  // If it's a full URL, reject bare generic domains or unverified Damascus placeholder
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const pathClean = parsed.pathname.replace(/\/+$/g, '');
+      const searchClean = parsed.search.trim();
+      if (!pathClean && !searchClean) {
+        return false;
+      }
+      if (/q=damascus/i.test(searchClean)) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Otherwise it's a handle (e.g., "@pixelstore" or "pixelstore")
+  const cleanHandle = trimmed
+    .replace(/^@/, '')
+    .replace(/^(t\.me\/|fb\.com\/|facebook\.com\/|instagram\.com\/)/i, '')
+    .replace(/\/+$/g, '')
+    .trim();
+
+  return cleanHandle.length >= 2;
+}
+
+
 
