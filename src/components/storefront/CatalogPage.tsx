@@ -83,19 +83,20 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const topCategories = categories.filter((c) => !c.parentId);
-  const activeParentCategory = categories.find(
+  const activeCategories = categories.filter((c) => c.isActive !== false);
+  const topCategories = activeCategories.filter((c) => !c.parentId);
+  const activeParentCategory = activeCategories.find(
     (c) => c.id === filters.categoryId
   );
-  const activeSubcategory = categories.find(
+  const activeSubcategory = activeCategories.find(
     (c) => c.id === filters.subcategoryId
   );
 
-  // Subcategories belonging to the currently selected parent category
+  // Subcategories belonging to the currently selected parent category (backend-managed taxonomy)
   const childSubcategories =
     filters.categoryId !== 'ALL'
-      ? categories.filter((c) => c.parentId === filters.categoryId)
-      : categories.filter((c) => Boolean(c.parentId));
+      ? activeCategories.filter((c) => c.parentId === filters.categoryId)
+      : activeCategories.filter((c) => Boolean(c.parentId));
 
   // Relevant Use-Case Tags for the current category or subcategory
   const targetCatOrSubId =
@@ -109,8 +110,12 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       : useCaseTags.filter(
           (u) =>
             u.applicableCategories.includes(targetCatOrSubId) ||
-            (activeParentCategory &&
-              u.applicableCategories.includes(activeParentCategory.id))
+            Boolean(
+              activeParentCategory &&
+                (u.applicableCategories.includes(activeParentCategory.id) ||
+                  activeParentCategory.useCaseIds?.includes(u.id))
+            ) ||
+            Boolean(activeSubcategory?.useCaseIds?.includes(u.id))
         );
 
   const filteredProducts = filterAndSortProducts(
@@ -299,6 +304,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
             <button
               type="button"
               data-testid="sidebar-subcat-ALL"
+              aria-pressed={filters.subcategoryId === 'ALL'}
               onClick={() => {
                 onUpdateFilters({ subcategoryId: 'ALL' });
                 setCurrentPage(1);
@@ -322,6 +328,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                   key={sub.id}
                   type="button"
                   data-testid={`sidebar-subcat-${sub.id}`}
+                  aria-pressed={isSelected}
                   onClick={() => {
                     onUpdateFilters({
                       categoryId: sub.parentId || filters.categoryId,
@@ -776,7 +783,234 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
         </aside>
 
         {/* Right Product Catalog Area (9 Columns on Desktop) */}
-        <div className="lg:col-span-9 space-y-3.5">
+        <div className="lg:col-span-9 space-y-3">
+          {/* COMPACT SUBCATEGORY QUICK BROWSING & INLINE USE-CASE BAR ABOVE PRODUCTS */}
+          {(childSubcategories.length > 0 || relevantUseCases.length > 0) && (
+            <section
+              data-testid="subcategory-quick-browse"
+              aria-label={
+                lang === 'ar'
+                  ? 'التصفح السريع للأقسام الفرعية'
+                  : 'Subcategory Quick Browsing'
+              }
+              className={`bg-white px-3 py-2.5 ${
+                themeId === 'contrast'
+                  ? 'rounded-none border-2 border-[#111318]'
+                  : 'rounded-xl border border-slate-200/90'
+              }`}
+            >
+              {childSubcategories.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[#111318]">
+                      <Layers className="w-3.5 h-3.5 text-[#8E4DEB] shrink-0" />
+                      <span>
+                        {activeParentCategory
+                          ? lang === 'ar'
+                            ? `الأقسام الفرعية — ${activeParentCategory.name.ar}`
+                            : `Subcategories — ${activeParentCategory.name.en}`
+                          : lang === 'ar'
+                          ? 'تصفح حسب القسم الفرعي'
+                          : 'Browse by Subcategory'}
+                      </span>
+                    </div>
+                    {filters.subcategoryId !== 'ALL' && (
+                      <button
+                        type="button"
+                        data-testid="quick-subcat-reset"
+                        onClick={() => {
+                          onUpdateFilters({ subcategoryId: 'ALL' });
+                          setCurrentPage(1);
+                        }}
+                        className="text-[11px] font-bold text-[#8E4DEB] hover:text-[#111318] transition-colors cursor-pointer"
+                      >
+                        {lang === 'ar'
+                          ? 'عرض كل القسم ←'
+                          : 'Show All in Category →'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Single-row balanced horizontal strip: stretches evenly across full width on desktop, swipes horizontally on mobile */}
+                  <div
+                    data-testid="quick-subcat-strip"
+                    className="flex items-stretch gap-1.5 overflow-x-auto no-scrollbar pb-0.5 snap-x"
+                  >
+                    {/* "All" Subcategory Tile */}
+                    <button
+                      type="button"
+                      data-testid="quick-subcat-ALL"
+                      aria-pressed={filters.subcategoryId === 'ALL'}
+                      onClick={() => {
+                        onUpdateFilters({ subcategoryId: 'ALL' });
+                        setCurrentPage(1);
+                      }}
+                      className={`snap-start flex-1 min-w-[108px] sm:min-w-[116px] h-11 px-2 py-1 border text-start transition-all flex items-center justify-between gap-1.5 cursor-pointer shrink-0 ${
+                        themeId === 'contrast' ? 'rounded-none' : 'rounded-lg'
+                      } ${
+                        filters.subcategoryId === 'ALL'
+                          ? 'bg-[#111318] border-[#111318] text-white shadow-xs'
+                          : 'bg-[#F8F7FA] border-slate-200/90 text-[#111318] hover:border-[#8E4DEB]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${
+                            filters.subcategoryId === 'ALL'
+                              ? 'bg-[#8E4DEB] text-white'
+                              : 'bg-white text-[#8E4DEB] border border-slate-200'
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="text-[11px] font-extrabold truncate">
+                          {lang === 'ar' ? 'عرض الكل' : 'All Items'}
+                        </span>
+                      </span>
+                      <span
+                        className={`font-mono-num text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          filters.subcategoryId === 'ALL'
+                            ? 'bg-white/15 text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {filters.categoryId !== 'ALL'
+                          ? products.filter(
+                              (p) =>
+                                p.isActive !== false &&
+                                p.categoryId === filters.categoryId
+                            ).length
+                          : products.filter((p) => p.isActive !== false).length}
+                      </span>
+                    </button>
+
+                    {/* Individual Subcategory Quick Tiles */}
+                    {childSubcategories.map((sub) => {
+                      const isSelected = filters.subcategoryId === sub.id;
+                      const subCount = products.filter(
+                        (p) => p.isActive !== false && p.subcategoryId === sub.id
+                      ).length;
+                      const shortName = sub.name[lang]
+                        .replace(/\s*\([^)]*\)\s*$/, '')
+                        .trim();
+
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          title={sub.name[lang]}
+                          data-testid={`quick-subcat-${sub.id}`}
+                          aria-pressed={isSelected}
+                          onClick={() => {
+                            onUpdateFilters({
+                              categoryId: sub.parentId || filters.categoryId,
+                              subcategoryId: isSelected ? 'ALL' : sub.id,
+                            });
+                            setCurrentPage(1);
+                          }}
+                          className={`snap-start flex-1 min-w-[120px] sm:min-w-[126px] h-11 px-2 py-1 border text-start transition-all flex items-center justify-between gap-1.5 cursor-pointer group shrink-0 ${
+                            themeId === 'contrast' ? 'rounded-none' : 'rounded-lg'
+                          } ${
+                            isSelected
+                              ? 'bg-[#8E4DEB] border-[#111318] text-white shadow-xs ring-1 ring-[#111318]'
+                              : 'bg-[#F8F7FA] border-slate-200/90 text-[#111318] hover:border-[#8E4DEB] hover:bg-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-8 h-7 flex items-center justify-center rounded bg-white border border-slate-200/80 overflow-hidden shrink-0 [&_svg]:!p-0.5">
+                              <ProductVisual
+                                visualKey={sub.visualKey || 'cat-components'}
+                                alt={sub.name[lang]}
+                              />
+                            </span>
+                            <span className="text-[11px] font-bold truncate">
+                              {shortName}
+                            </span>
+                          </span>
+                          <span
+                            className={`font-mono-num text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-[#111318] text-white'
+                                : 'bg-white text-slate-600 border border-slate-200 group-hover:border-[#8E4DEB]/40'
+                            }`}
+                          >
+                            {subCount}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Compact Secondary Row for Use-Case Filters (Gaming, Office, Everyday, Work/Study) */}
+              {relevantUseCases.length > 0 && (
+                <div
+                  data-testid="quick-usecase-row"
+                  className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar ${
+                    childSubcategories.length > 0
+                      ? 'mt-2 pt-2 border-t border-slate-100'
+                      : ''
+                  }`}
+                >
+                  <span className="text-[11px] font-extrabold text-slate-500 whitespace-nowrap me-1 flex items-center gap-1 shrink-0">
+                    <Sparkles className="w-3 h-3 text-[#EF875D]" />
+                    <span>
+                      {lang === 'ar' ? 'طبيعة الاستخدام:' : 'Use Case:'}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="quick-usecase-ALL"
+                    aria-pressed={filters.useCaseId === 'ALL'}
+                    onClick={() => {
+                      onUpdateFilters({ useCaseId: 'ALL' });
+                      setCurrentPage(1);
+                    }}
+                    className={`h-7 px-2.5 text-[11px] font-bold transition-colors flex items-center gap-1 shrink-0 cursor-pointer ${
+                      themeId === 'contrast' ? 'rounded-none' : 'rounded-md'
+                    } ${
+                      filters.useCaseId === 'ALL'
+                        ? 'bg-[#111318] text-white'
+                        : 'bg-[#F4F3F7] text-slate-700 hover:bg-slate-200/80'
+                    }`}
+                  >
+                    <span>{lang === 'ar' ? 'الكل' : 'All'}</span>
+                  </button>
+                  {relevantUseCases.map((uc) => {
+                    const active = filters.useCaseId === uc.id;
+                    return (
+                      <button
+                        key={uc.id}
+                        type="button"
+                        data-testid={`quick-usecase-${uc.id}`}
+                        aria-pressed={active}
+                        onClick={() => {
+                          onUpdateFilters({
+                            useCaseId: active ? 'ALL' : uc.id,
+                          });
+                          setCurrentPage(1);
+                        }}
+                        className={`h-7 px-2.5 text-[11px] font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                          themeId === 'contrast' ? 'rounded-none' : 'rounded-md'
+                        } ${
+                          active
+                            ? 'bg-[#EF875D] text-[#111318] border border-[#111318]'
+                            : 'bg-[#F4F3F7] text-slate-700 hover:bg-slate-200/80 border border-transparent'
+                        }`}
+                      >
+                        {getUseCaseIcon(uc.id)}
+                        <span>
+                          {uc.name[lang].replace(/\s*\([^)]*\)\s*$/, '').trim()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Toolbar: Search Within View, Active Filter Chips, & Sort */}
           <div
             data-testid="catalog-toolbar"

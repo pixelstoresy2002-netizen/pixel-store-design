@@ -190,40 +190,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           </button>
         </form>
 
-        {/* End Action Cluster (Exclusive Offers & Relocated Language Switcher) */}
+        {/* End Action Cluster (Relocated Language Switcher — Upper Exclusive Offers Duplicate Removed) */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => onNavigate('offers')}
-            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
-              isContrastHeader ? 'rounded-none' : 'rounded-md'
-            } ${
-              currentView === 'offers'
-                ? 'bg-[#D66C9D] text-white ring-2 ring-[#EF875D]'
-                : themeId === 'retail'
-                ? 'bg-[#EF875D] text-[#111318] hover:bg-[#e47649]'
-                : isContrastHeader
-                ? 'bg-[#D66C9D] text-white hover:bg-[#c5598b]'
-                : 'bg-[#111318] text-white hover:bg-[#8E4DEB]'
-            }`}
-          >
-            <Flame
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
-                themeId === 'retail' ? 'text-[#111318]' : 'text-[#EF875D]'
-              }`}
-            />
-            <span>{lang === 'ar' ? 'العروض الحصرية' : 'Exclusive Offers'}</span>
-            <span
-              className={`font-mono-num text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.2 rounded-xs ${
-                themeId === 'retail'
-                  ? 'bg-[#111318] text-white'
-                  : 'bg-white/15 text-white'
-              }`}
-            >
-              {activeOffersCount}
-            </span>
-          </button>
-
           <button
             type="button"
             data-testid="lang-toggle-btn"
@@ -436,22 +404,34 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                 </span>
               </button>
 
-              {/* Exclusive Offers */}
+              {/* Exclusive Offers (Single Authoritative Shortcut with Active Count Badge) */}
               <button
                 type="button"
                 data-testid="nav-tab-exclusive-offers"
                 onClick={() => onNavigate('offers')}
-                className={`${navBtnBase} ${
+                className={`${navBtnBase} group ${
                   currentView === 'offers'
-                    ? 'bg-[#D66C9D] text-white'
+                    ? 'bg-[#D66C9D] text-white border border-[#EF875D]'
                     : isContrastHeader || themeId === 'retail'
                     ? 'bg-[#EF875D]/20 text-[#EF875D] border border-[#EF875D]/40 hover:bg-[#EF875D] hover:text-[#111318]'
                     : 'bg-[#D66C9D]/15 text-[#D66C9D] border border-[#D66C9D]/30 hover:bg-[#D66C9D] hover:text-white'
                 }`}
               >
-                <Flame className="w-3.5 h-3.5" />
+                <Flame className="w-3.5 h-3.5 shrink-0" />
                 <span>
                   {lang === 'ar' ? 'العروض الحصرية' : 'Exclusive Offers'}
+                </span>
+                <span
+                  data-testid="nav-offers-count-badge"
+                  className={`font-mono-num text-[10px] leading-none px-1.5 py-0.5 rounded-xs font-extrabold transition-colors ${
+                    currentView === 'offers'
+                      ? 'bg-[#111318] text-white'
+                      : isContrastHeader || themeId === 'retail'
+                      ? 'bg-[#EF875D] text-[#111318] group-hover:bg-[#111318] group-hover:text-white'
+                      : 'bg-[#D66C9D] text-white'
+                  }`}
+                >
+                  {activeOffersCount}
                 </span>
               </button>
             </div>
@@ -595,15 +575,21 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
               <button
                 type="button"
+                data-testid="mobile-nav-exclusive-offers"
                 onClick={() => {
                   onNavigate('offers');
                   setMobileMenuOpen(false);
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold bg-[#D66C9D]/20 text-[#EF875D] border border-[#D66C9D]/30 text-start"
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-md text-xs font-bold bg-[#D66C9D]/20 text-[#EF875D] border border-[#D66C9D]/30 text-start"
               >
-                <Flame className="w-4 h-4" />
-                <span>
-                  {lang === 'ar' ? 'العروض الحصرية' : 'Exclusive Offers'}
+                <span className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 shrink-0" />
+                  <span>
+                    {lang === 'ar' ? 'العروض الحصرية' : 'Exclusive Offers'}
+                  </span>
+                </span>
+                <span className="font-mono-num text-[10px] px-1.5 py-0.5 rounded bg-[#EF875D] text-[#111318] font-extrabold">
+                  {activeOffersCount}
                 </span>
               </button>
             </div>

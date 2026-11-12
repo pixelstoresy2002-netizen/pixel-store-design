@@ -34,6 +34,7 @@ export interface GenericSpec {
 export interface Product {
   id: string;
   sku: string;
+  slug?: string;
   name: BilingualText;
   description: BilingualText;
   categoryId: string;
@@ -49,10 +50,14 @@ export interface Product {
   isBestSeller: boolean;
   isNewArrival: boolean;
   isFeatured: boolean;
+  isActive?: boolean;
   laptopSpecs?: LaptopSpecs;
   specs: GenericSpec[];
   createdAt: string;
+  updatedAt?: string;
 }
+
+export type OfferTemporalStatus = 'ACTIVE' | 'SCHEDULED' | 'EXPIRED';
 
 export interface Offer {
   id: string;
@@ -63,32 +68,81 @@ export interface Offer {
   startTime: string;
   endTime: string;
   isExclusive: boolean;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Category {
   id: string;
+  slug?: string;
   name: BilingualText;
   description: BilingualText;
   iconKey: string;
   parentId?: string;
   useCaseIds: string[];
   visualKey: string;
+  sortOrder?: number;
+  isActive?: boolean;
 }
 
 export interface UseCaseTag {
   id: string;
+  slug?: string;
   name: BilingualText;
   subtitle: BilingualText;
   applicableCategories: string[];
   accentColor: 'purple' | 'pink' | 'coral';
   visualKey: string;
+  sortOrder?: number;
+  isActive?: boolean;
 }
 
 export interface Brand {
   id: string;
+  slug?: string;
   name: string;
   country: BilingualText;
   featured: boolean;
+  isActive?: boolean;
+}
+
+export type BannerDestinationView =
+  | 'home'
+  | 'shop'
+  | 'category'
+  | 'offers'
+  | 'services'
+  | 'contact';
+
+export interface HeroSlide {
+  id: string;
+  kicker: BilingualText;
+  title: BilingualText;
+  subtitle: BilingualText;
+  ctaLabel: BilingualText;
+  visualKey: string;
+  targetView: BannerDestinationView;
+  targetCategory?: string;
+  targetSubcategory?: string;
+  accent: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface PromoBanner {
+  id: string;
+  kicker: BilingualText;
+  title: BilingualText;
+  subtitle: BilingualText;
+  ctaLabel: BilingualText;
+  visualKey: string;
+  targetView: BannerDestinationView;
+  targetCategory?: string;
+  targetSubcategory?: string;
+  themeVariant: 'dark' | 'contrast';
+  sortOrder: number;
+  isActive: boolean;
 }
 
 export interface CustomerRequest {
@@ -101,7 +155,9 @@ export interface CustomerRequest {
   customerName: string;
   phoneNumber: string;
   note: string;
+  adminNote?: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'NEW' | 'CONTACTED' | 'COMPLETED';
 }
 
@@ -111,7 +167,10 @@ export interface StoreService {
   title: BilingualText;
   badge: BilingualText;
   subtitle: BilingualText;
+  summary?: BilingualText;
   description: BilingualText;
+  primaryImage?: string;
+  galleryImages?: string[];
   highlights: {
     title: BilingualText;
     description: BilingualText;
@@ -119,10 +178,11 @@ export interface StoreService {
   checklist: BilingualText[];
   turnaroundNote: BilingualText;
   startingPriceNote?: BilingualText;
-  iconKey: 'cooling' | 'maintenance' | 'cameras' | 'custom';
+  iconKey: 'cooling' | 'maintenance' | 'cameras' | 'custom' | string;
   isActive: boolean;
   isFeatured: boolean;
   showInNavbarShortcut?: boolean;
+  sortOrder?: number;
   thermalBenchmark?: {
     deviceModel: BilingualText;
     beforeTempC: number;
@@ -132,7 +192,6 @@ export interface StoreService {
     fanNoiseBefore: BilingualText;
     fanNoiseAfter: BilingualText;
   };
-  galleryImages?: string[];
 }
 
 export interface StoreSettings {

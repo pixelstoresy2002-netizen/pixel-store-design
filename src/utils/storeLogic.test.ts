@@ -24,8 +24,20 @@ import {
   isWhatsappLinkVerified,
   isExternalChannelVerified,
   normalizeChannelUrl,
+  getOfferTemporalStatus,
+  getServiceGalleryImages,
 } from './storeLogic.ts';
-import type { FilterState, Offer, Product } from '../types/store.ts';
+import {
+  DEFAULT_ADMIN_PRODUCTS_QUERY,
+  DEFAULT_ADMIN_OFFERS_QUERY,
+  DEFAULT_ADMIN_REQUESTS_QUERY,
+  parseAdminProductsQuery,
+  serializeAdminProductsQuery,
+  queryAdminProducts,
+  queryAdminOffers,
+  queryAdminRequests,
+} from './adminQueryContract.ts';
+import type { CustomerRequest, FilterState, Offer, Product } from '../types/store.ts';
 
 const sampleProduct: Product = {
   id: 'prod-1',
@@ -302,3 +314,177 @@ test('5-image product gallery deduplication and hover cycling sequence (1->2->3-
   assert.equal(getNextGalleryImageIndex(4, 5), 0);
 });
 
+test('getOfferTemporalStatus classifies SCHEDULED, ACTIVE, and EXPIRED offers accurately', () => {
+  const beforeStart = new Date('2026-10-20T00:00:00Z').getTime();
+  const duringActive = new Date('2026-10-27T12:00:00Z').getTime();
+  const afterEnd = new Date('2026-10-31T00:00:00Z').getTime();
+
+  assert.equal(getOfferTemporalStatus(sampleOffer, beforeStart), 'SCHEDULED');
+  assert.equal(getOfferTemporalStatus(sampleOffer, duringActive), 'ACTIVE');
+  assert.equal(getOfferTemporalStatus(sampleOffer, afterEnd), 'EXPIRED');
+  assert.equal(
+    getOfferTemporalStatus({ ...sampleOffer, isActive: false }, duringActive),
+    'EXPIRED'
+  );
+});
+
+test('Admin query contract serializes, parses, filters, sorts, and paginates products, offers, and customer requests', () => {
+  const customQuery = {
+    ...DEFAULT_ADMIN_PRODUCTS_QUERY,
+    q: 'RTX',
+    categoryId: 'laptops',
+    condition: 'USED' as const,
+    bestSeller: 'true' as const,
+    page: 2,
+    limit: 20,
+    sort: 'priceUsd' as const,
+    order: 'asc' as const,
+  };
+
+  const serializedStr = serializeAdminProductsQuery(customQuery);
+  const serialized = new URLSearchParams(serializedStr);
+  assert.equal(serialized.get('q'), 'RTX');
+  assert.equal(serialized.get('categoryId'), 'laptops');
+  assert.equal(serialized.get('condition'), 'USED');
+  assert.equal(serialized.get('bestSeller'), 'true');
+  assert.equal(serialized.get('page'), '2');
+  assert.equal(serialized.get('limit'), '20');
+  assert.equal(serialized.get('sort'), 'priceUsd');
+  assert.equal(serialized.get('order'), 'asc');
+
+  const roundTrip = parseAdminProductsQuery(serialized);
+  assert.deepEqual(roundTrip, customQuery);
+
+  const usedLaptop: Product = {
+    ...sampleProduct,
+    id: 'prod-2',
+    sku: 'PXL-LAP-002',
+    name: { ar: 'لابتوب مستعمل Lenovo Legion', en: 'Lenovo Legion 5 Pro Used' },
+    categoryId: 'laptops',
+    brandId: 'lenovo',
+    condition: 'USED',
+    priceUsd: 920,
+    isBestSeller: false,
+    laptopSpecs: {
+      processor: 'Ryzen 7 6800H',
+      memory: '16GB DDR5',
+      storage: '1TB SSD',
+      display: '16" QHD 165Hz',
+    },
+  };
+
+  const nowMs = new Date('2026-10-27T12:00:00Z').getTime();
+
+  // Filter by condition = USED
+  const usedRes = queryAdminProducts(
+    [sampleProduct, usedLaptop],
+    [sampleOffer],
+    { ...DEFAULT_ADMIN_PRODUCTS_QUERY, condition: 'USED' },
+    nowMs
+  );
+  assert.equal(usedRes.total, 1);
+  assert.equal(usedRes.items[0].id, 'prod-2');
+
+  // Filter by active offer
+  const offerProdRes = queryAdminProducts(
+    [sampleProduct, usedLaptop],
+    [sampleOffer],
+    { ...DEFAULT_ADMIN_PRODUCTS_QUERY, hasOffer: 'true' },
+    nowMs
+  );
+  assert.equal(offerProdRes.total, 1);
+  assert.equal(offerProdRes.items[0].id, 'prod-1');
+
+  // Query offers by status
+  const activeOffersRes = queryAdminOffers(
+    [sampleOffer],
+    [sampleProduct, usedLaptop],
+    { ...DEFAULT_ADMIN_OFFERS_QUERY, status: 'ACTIVE' },
+    nowMs
+  );
+  assert.equal(activeOffersRes.total, 1);
+
+  // Query customer requests
+  const reqs: CustomerRequest[] = [
+    {
+      id: 'req-1',
+      productId: 'prod-1',
+      productName: sampleProduct.name,
+      productSku: sampleProduct.sku,
+      priceUsdAtRequest: 30,
+      priceSypAtRequest: 375000,
+      customerName: 'Samer',
+      phoneNumber: '+963 933 811 106',
+      note: 'Interested in keyboard',
+      status: 'NEW',
+      createdAt: '2026-10-27T10:00:00Z',
+    },
+    {
+      id: 'req-2',
+      productId: 'prod-2',
+      productName: usedLaptop.name,
+      productSku: usedLaptop.sku,
+      priceUsdAtRequest: 920,
+      priceSypAtRequest: 11500000,
+      customerName: 'Rami',
+      phoneNumber: '+963 944 111 222',
+      note: 'Call afternoon',
+      status: 'COMPLETED',
+      createdAt: '2026-10-26T10:00:00Z',
+    },
+  ];
+
+  const newReqs = queryAdminRequests(reqs, {
+    ...DEFAULT_ADMIN_REQUESTS_QUERY,
+    status: 'NEW',
+  });
+  assert.equal(newReqs.total, 1);
+  assert.equal(newReqs.items[0].customerName, 'Samer');
+});
+
+test('getServiceGalleryImages returns local /assets/services/*.svg images and supports 1..5 gallery items', () => {
+  // Default fallback when galleryImages is omitted
+  const coolingDefault = getServiceGalleryImages({
+    iconKey: 'cooling',
+  });
+  assert.deepEqual(coolingDefault, [
+    '/assets/services/cooling-1.svg',
+    '/assets/services/cooling-2.svg',
+    '/assets/services/cooling-3.svg',
+    '/assets/services/cooling-4.svg',
+    '/assets/services/cooling-5.svg',
+  ]);
+
+  // Custom primaryImage + galleryImages deduplication up to 5 items
+  const customCameras = getServiceGalleryImages({
+    iconKey: 'cameras',
+    primaryImage: '/assets/services/cameras-3.svg',
+    galleryImages: [
+      '/assets/services/cameras-3.svg',
+      '/assets/services/cameras-1.svg',
+      '/assets/services/cameras-2.svg',
+      '/assets/services/cameras-4.svg',
+      '/assets/services/cameras-5.svg',
+      '/assets/services/cameras-extra-6.svg',
+    ],
+  });
+  assert.equal(customCameras.length, 5);
+  assert.equal(customCameras[0], '/assets/services/cameras-3.svg');
+  assert.equal(customCameras[4], '/assets/services/cameras-5.svg');
+
+  // Supports fewer than 5 images when Admin removes gallery items
+  const reducedGallery = getServiceGalleryImages({
+    iconKey: 'maintenance',
+    primaryImage: '/assets/services/maintenance-2.svg',
+    galleryImages: [
+      '/assets/services/maintenance-2.svg',
+      '/assets/services/maintenance-1.svg',
+      '/assets/services/maintenance-4.svg',
+    ],
+  });
+  assert.deepEqual(reducedGallery, [
+    '/assets/services/maintenance-2.svg',
+    '/assets/services/maintenance-1.svg',
+    '/assets/services/maintenance-4.svg',
+  ]);
+});

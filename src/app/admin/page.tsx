@@ -16,6 +16,8 @@ export default function AdminRoutePage() {
     brands,
     useCaseTags,
     offers,
+    heroSlides,
+    promoBanners,
     customerRequests,
     services,
     settings,
@@ -25,14 +27,24 @@ export default function AdminRoutePage() {
     handleDeleteProduct,
     handleToggleBestSeller,
     handleSaveCategory,
+    handleDeleteCategory,
     handleSaveBrand,
+    handleDeleteBrand,
     handleSaveUseCaseTag,
+    handleDeleteUseCaseTag,
     handleSaveOffer,
     handleDeleteOffer,
+    handleSaveHeroSlide,
+    handleReorderHeroSlides,
+    handleDeleteHeroSlide,
+    handleSavePromoBanner,
+    handleReorderPromoBanners,
     handleSaveService,
     handleDeleteService,
     handleUpdateRequestStatus,
+    handleDeleteCustomerRequest,
     setSettings,
+    handleResetDemoData,
   } = useStore();
 
   return (
@@ -46,6 +58,8 @@ export default function AdminRoutePage() {
         brands={brands}
         useCaseTags={useCaseTags}
         offers={offers}
+        heroSlides={heroSlides}
+        promoBanners={promoBanners}
         customerRequests={customerRequests}
         services={services}
         settings={settings}
@@ -56,14 +70,24 @@ export default function AdminRoutePage() {
         onDeleteProduct={handleDeleteProduct}
         onToggleBestSeller={handleToggleBestSeller}
         onSaveCategory={handleSaveCategory}
+        onDeleteCategory={handleDeleteCategory}
         onSaveBrand={handleSaveBrand}
+        onDeleteBrand={handleDeleteBrand}
         onSaveUseCaseTag={handleSaveUseCaseTag}
+        onDeleteUseCaseTag={handleDeleteUseCaseTag}
         onSaveOffer={handleSaveOffer}
         onDeleteOffer={handleDeleteOffer}
+        onSaveHeroSlide={handleSaveHeroSlide}
+        onReorderHeroSlides={handleReorderHeroSlides}
+        onDeleteHeroSlide={handleDeleteHeroSlide}
+        onSavePromoBanner={handleSavePromoBanner}
+        onReorderPromoBanners={handleReorderPromoBanners}
         onSaveService={handleSaveService}
         onDeleteService={handleDeleteService}
         onUpdateRequestStatus={handleUpdateRequestStatus}
+        onDeleteCustomerRequest={handleDeleteCustomerRequest}
         onUpdateSettings={setSettings}
+        onResetDemoData={handleResetDemoData}
       />
     </div>
   );

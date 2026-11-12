@@ -15,7 +15,9 @@ import {
   INITIAL_BRANDS,
   INITIAL_CATEGORIES,
   INITIAL_CUSTOMER_REQUESTS,
+  INITIAL_HERO_SLIDES,
   INITIAL_PRODUCTS,
+  INITIAL_PROMO_BANNERS,
   INITIAL_SERVICES,
   INITIAL_STORE_SETTINGS,
   INITIAL_USE_CASE_TAGS,
@@ -27,9 +29,11 @@ import {
   CustomerRequest,
   DesignThemeId,
   FilterState,
+  HeroSlide,
   Language,
   Offer,
   Product,
+  PromoBanner,
   StoreService,
   StoreSettings,
   UseCaseTag,
@@ -57,7 +61,7 @@ export const DEFAULT_FILTERS: FilterState = {
   sortBy: 'featured',
 };
 
-const STORAGE_KEY_SERVICES = 'pixel_store_services_v2';
+const STORAGE_KEY_SERVICES = 'pixel_store_services_v3';
 const STORAGE_KEY_SETTINGS = 'pixel_store_settings_v2';
 const STORAGE_KEY_PRODUCTS = 'pixel_store_products_v2';
 const STORAGE_KEY_REQUESTS = 'pixel_store_requests_v2';
@@ -65,6 +69,8 @@ const STORAGE_KEY_OFFERS = 'pixel_store_offers_v2';
 const STORAGE_KEY_CATEGORIES = 'pixel_store_categories_v2';
 const STORAGE_KEY_BRANDS = 'pixel_store_brands_v2';
 const STORAGE_KEY_USECASES = 'pixel_store_usecases_v2';
+const STORAGE_KEY_HERO_SLIDES = 'pixel_store_hero_slides_v2';
+const STORAGE_KEY_PROMO_BANNERS = 'pixel_store_promo_banners_v2';
 const STORAGE_KEY_LANG = 'pixel_store_lang_v2';
 
 // Deterministic anchor timestamp so SSR and initial client hydration match to the millisecond
@@ -80,6 +86,8 @@ interface StoreContextValue {
   brands: Brand[];
   useCaseTags: UseCaseTag[];
   offers: Offer[];
+  heroSlides: HeroSlide[];
+  promoBanners: PromoBanner[];
   customerRequests: CustomerRequest[];
   services: StoreService[];
   selectedServiceId: string | 'ALL';
@@ -118,16 +126,27 @@ interface StoreContextValue {
   handleDeleteProduct: (productId: string) => void;
   handleToggleBestSeller: (productId: string) => void;
   handleSaveCategory: (cat: Category) => void;
+  handleDeleteCategory: (categoryId: string) => boolean;
   handleSaveBrand: (brand: Brand) => void;
+  handleDeleteBrand: (brandId: string) => boolean;
   handleSaveUseCaseTag: (tag: UseCaseTag) => void;
+  handleDeleteUseCaseTag: (tagId: string) => void;
   handleSaveOffer: (offer: Offer) => void;
   handleDeleteOffer: (offerId: string) => void;
+  handleSaveHeroSlide: (slide: HeroSlide) => void;
+  handleReorderHeroSlides: (slides: HeroSlide[]) => void;
+  handleDeleteHeroSlide: (slideId: string) => void;
+  handleSavePromoBanner: (banner: PromoBanner) => void;
+  handleReorderPromoBanners: (banners: PromoBanner[]) => void;
   handleSaveService: (srv: StoreService) => void;
   handleDeleteService: (serviceId: string) => void;
   handleUpdateRequestStatus: (
     requestId: string,
-    status: CustomerRequest['status']
+    status: CustomerRequest['status'],
+    adminNote?: string
   ) => void;
+  handleDeleteCustomerRequest: (requestId: string) => void;
+  handleResetDemoData: () => void;
   setSettings: React.Dispatch<React.SetStateAction<StoreSettings>>;
 }
 
@@ -154,6 +173,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const [offers, setOffers] = useState<Offer[]>(() =>
     createInitialOffers(SSR_ANCHOR_NOW_MS)
+  );
+  const [heroSlides, setHeroSlides] =
+    useState<HeroSlide[]>(INITIAL_HERO_SLIDES);
+  const [promoBanners, setPromoBanners] = useState<PromoBanner[]>(
+    INITIAL_PROMO_BANNERS
   );
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>(
     INITIAL_CUSTOMER_REQUESTS
@@ -186,7 +210,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       if (savedServices) {
         const parsed = JSON.parse(savedServices);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setServices(parsed);
+          const initialSrvMap = new Map(
+            INITIAL_SERVICES.map((item) => [item.id, item])
+          );
+          const mergedServices = parsed.map((srv: StoreService) => {
+            const seed = initialSrvMap.get(srv.id);
+            const hasValidAssetPrimary =
+              srv.primaryImage &&
+              (srv.primaryImage.startsWith('/assets/') ||
+                srv.primaryImage.startsWith('http'));
+            return {
+              ...seed,
+              ...srv,
+              primaryImage: hasValidAssetPrimary
+                ? srv.primaryImage
+                : seed?.primaryImage ?? srv.primaryImage,
+              galleryImages:
+                Array.isArray(srv.galleryImages) &&
+                srv.galleryImages.length > 0
+                  ? srv.galleryImages
+                  : seed?.galleryImages ?? [],
+              summary: srv.summary ?? seed?.summary,
+            };
+          });
+          setServices(mergedServices);
         }
       }
       const savedSettings = window.localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -259,6 +306,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         const parsed = JSON.parse(savedUseCases);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setUseCaseTags(parsed);
+        }
+      }
+      const savedHeroSlides = window.localStorage.getItem(
+        STORAGE_KEY_HERO_SLIDES
+      );
+      if (savedHeroSlides) {
+        const parsed = JSON.parse(savedHeroSlides);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setHeroSlides(parsed);
+        }
+      }
+      const savedPromoBanners = window.localStorage.getItem(
+        STORAGE_KEY_PROMO_BANNERS
+      );
+      if (savedPromoBanners) {
+        const parsed = JSON.parse(savedPromoBanners);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPromoBanners(parsed);
         }
       }
     } catch {
@@ -386,6 +451,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [useCaseTags, hydratedFromStorage]);
 
+  useEffect(() => {
+    if (!hydratedFromStorage) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY_HERO_SLIDES,
+        JSON.stringify(heroSlides)
+      );
+    } catch {
+      // Ignore
+    }
+  }, [heroSlides, hydratedFromStorage]);
+
+  useEffect(() => {
+    if (!hydratedFromStorage) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY_PROMO_BANNERS,
+        JSON.stringify(promoBanners)
+      );
+    } catch {
+      // Ignore
+    }
+  }, [promoBanners, hydratedFromStorage]);
+
   const effectiveNowMs = simulateExpiredOffers
     ? realNowMs + 6 * 24 * 60 * 60 * 1000
     : realNowMs;
@@ -438,7 +527,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         const targetService = categoryId ?? 'ALL';
         setSelectedServiceId(targetService);
         if (targetService !== 'ALL') {
-          router.push(`/services?service=${encodeURIComponent(targetService)}`);
+          router.push(`/services/${encodeURIComponent(targetService)}`);
         } else {
           router.push('/services');
         }
@@ -574,47 +663,177 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const handleSaveProduct = useCallback((prod: Product) => {
+    const stamped: Product = {
+      ...prod,
+      updatedAt: new Date().toISOString(),
+    };
     setProducts((prev) => {
-      const exists = prev.some((p) => p.id === prod.id);
+      const exists = prev.some((p) => p.id === stamped.id);
       return exists
-        ? prev.map((p) => (p.id === prod.id ? prod : p))
-        : [prod, ...prev];
+        ? prev.map((p) => (p.id === stamped.id ? stamped : p))
+        : [stamped, ...prev];
     });
   }, []);
 
   const handleDeleteProduct = useCallback((productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+    setOffers((prev) => prev.filter((o) => o.productId !== productId));
   }, []);
 
   const handleToggleBestSeller = useCallback((productId: string) => {
     setProducts((prev) =>
       prev.map((p) =>
-        p.id === productId ? { ...p, isBestSeller: !p.isBestSeller } : p
+        p.id === productId
+          ? {
+              ...p,
+              isBestSeller: !p.isBestSeller,
+              updatedAt: new Date().toISOString(),
+            }
+          : p
       )
     );
   }, []);
 
   const handleSaveCategory = useCallback((cat: Category) => {
-    setCategories((prev) => [...prev, cat]);
+    setCategories((prev) => {
+      const exists = prev.some((c) => c.id === cat.id);
+      return exists
+        ? prev.map((c) => (c.id === cat.id ? cat : c))
+        : [...prev, cat];
+    });
   }, []);
+
+  const handleDeleteCategory = useCallback(
+    (categoryId: string): boolean => {
+      const hasSubcategories = categories.some(
+        (c) => c.parentId === categoryId
+      );
+      const hasProducts = products.some(
+        (p) => p.categoryId === categoryId || p.subcategoryId === categoryId
+      );
+      if (hasSubcategories || hasProducts) {
+        return false;
+      }
+      setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+      return true;
+    },
+    [categories, products]
+  );
 
   const handleSaveBrand = useCallback((brand: Brand) => {
-    setBrands((prev) => [...prev, brand]);
+    setBrands((prev) => {
+      const exists = prev.some((b) => b.id === brand.id);
+      return exists
+        ? prev.map((b) => (b.id === brand.id ? brand : b))
+        : [...prev, brand];
+    });
   }, []);
 
+  const handleDeleteBrand = useCallback(
+    (brandId: string): boolean => {
+      const hasProducts = products.some((p) => p.brandId === brandId);
+      if (hasProducts) {
+        return false;
+      }
+      setBrands((prev) => prev.filter((b) => b.id !== brandId));
+      return true;
+    },
+    [products]
+  );
+
   const handleSaveUseCaseTag = useCallback((tag: UseCaseTag) => {
-    setUseCaseTags((prev) => [...prev, tag]);
+    setUseCaseTags((prev) => {
+      const exists = prev.some((t) => t.id === tag.id);
+      return exists
+        ? prev.map((t) => (t.id === tag.id ? tag : t))
+        : [...prev, tag];
+    });
+  }, []);
+
+  const handleDeleteUseCaseTag = useCallback((tagId: string) => {
+    setUseCaseTags((prev) => prev.filter((t) => t.id !== tagId));
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.useCaseIds.includes(tagId)
+          ? { ...p, useCaseIds: p.useCaseIds.filter((id) => id !== tagId) }
+          : p
+      )
+    );
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.useCaseIds.includes(tagId)
+          ? { ...c, useCaseIds: c.useCaseIds.filter((id) => id !== tagId) }
+          : c
+      )
+    );
   }, []);
 
   const handleSaveOffer = useCallback((offer: Offer) => {
-    setOffers((prev) => [
-      offer,
-      ...prev.filter((o) => o.productId !== offer.productId),
-    ]);
+    const stamped: Offer = {
+      ...offer,
+      updatedAt: new Date().toISOString(),
+    };
+    setOffers((prev) => {
+      const existsById = prev.some((o) => o.id === stamped.id);
+      if (existsById) {
+        return prev.map((o) => (o.id === stamped.id ? stamped : o));
+      }
+      return [
+        stamped,
+        ...prev.filter((o) => o.productId !== stamped.productId),
+      ];
+    });
   }, []);
 
   const handleDeleteOffer = useCallback((offerId: string) => {
     setOffers((prev) => prev.filter((o) => o.id !== offerId));
+  }, []);
+
+  const handleSaveHeroSlide = useCallback((slide: HeroSlide) => {
+    setHeroSlides((prev) => {
+      const exists = prev.some((s) => s.id === slide.id);
+      const next = exists
+        ? prev.map((s) => (s.id === slide.id ? slide : s))
+        : [...prev, slide];
+      return [...next].sort((a, b) => a.sortOrder - b.sortOrder);
+    });
+  }, []);
+
+  const handleReorderHeroSlides = useCallback((slides: HeroSlide[]) => {
+    setHeroSlides(
+      slides.map((s, idx) => ({
+        ...s,
+        sortOrder: idx + 1,
+      }))
+    );
+  }, []);
+
+  const handleDeleteHeroSlide = useCallback((slideId: string) => {
+    setHeroSlides((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev
+        .filter((s) => s.id !== slideId)
+        .map((s, idx) => ({ ...s, sortOrder: idx + 1 }));
+    });
+  }, []);
+
+  const handleSavePromoBanner = useCallback((banner: PromoBanner) => {
+    setPromoBanners((prev) => {
+      const exists = prev.some((b) => b.id === banner.id);
+      const next = exists
+        ? prev.map((b) => (b.id === banner.id ? banner : b))
+        : [...prev, banner];
+      return [...next].sort((a, b) => a.sortOrder - b.sortOrder);
+    });
+  }, []);
+
+  const handleReorderPromoBanners = useCallback((banners: PromoBanner[]) => {
+    setPromoBanners(
+      banners.map((b, idx) => ({
+        ...b,
+        sortOrder: idx + 1,
+      }))
+    );
   }, []);
 
   const handleSaveService = useCallback((srv: StoreService) => {
@@ -631,13 +850,57 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const handleUpdateRequestStatus = useCallback(
-    (requestId: string, status: CustomerRequest['status']) => {
+    (
+      requestId: string,
+      status: CustomerRequest['status'],
+      adminNote?: string
+    ) => {
       setCustomerRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? { ...r, status } : r))
+        prev.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                status,
+                adminNote: adminNote !== undefined ? adminNote : r.adminNote,
+                updatedAt: new Date().toISOString(),
+              }
+            : r
+        )
       );
     },
     []
   );
+
+  const handleDeleteCustomerRequest = useCallback((requestId: string) => {
+    setCustomerRequests((prev) => prev.filter((r) => r.id !== requestId));
+  }, []);
+
+  const handleResetDemoData = useCallback(() => {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY_SERVICES);
+      window.localStorage.removeItem(STORAGE_KEY_SETTINGS);
+      window.localStorage.removeItem(STORAGE_KEY_PRODUCTS);
+      window.localStorage.removeItem(STORAGE_KEY_REQUESTS);
+      window.localStorage.removeItem(STORAGE_KEY_OFFERS);
+      window.localStorage.removeItem(STORAGE_KEY_CATEGORIES);
+      window.localStorage.removeItem(STORAGE_KEY_BRANDS);
+      window.localStorage.removeItem(STORAGE_KEY_USECASES);
+      window.localStorage.removeItem(STORAGE_KEY_HERO_SLIDES);
+      window.localStorage.removeItem(STORAGE_KEY_PROMO_BANNERS);
+    } catch {
+      // Ignore
+    }
+    setSettings(INITIAL_STORE_SETTINGS);
+    setProducts(INITIAL_PRODUCTS);
+    setCategories(INITIAL_CATEGORIES);
+    setBrands(INITIAL_BRANDS);
+    setUseCaseTags(INITIAL_USE_CASE_TAGS);
+    setOffers(createInitialOffers(realNowMs));
+    setHeroSlides(INITIAL_HERO_SLIDES);
+    setPromoBanners(INITIAL_PROMO_BANNERS);
+    setCustomerRequests(INITIAL_CUSTOMER_REQUESTS);
+    setServices(INITIAL_SERVICES);
+  }, [realNowMs]);
 
   const value = useMemo<StoreContextValue>(
     () => ({
@@ -650,6 +913,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       brands,
       useCaseTags,
       offers,
+      heroSlides,
+      promoBanners,
       customerRequests,
       services,
       selectedServiceId,
@@ -676,13 +941,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       handleDeleteProduct,
       handleToggleBestSeller,
       handleSaveCategory,
+      handleDeleteCategory,
       handleSaveBrand,
+      handleDeleteBrand,
       handleSaveUseCaseTag,
+      handleDeleteUseCaseTag,
       handleSaveOffer,
       handleDeleteOffer,
+      handleSaveHeroSlide,
+      handleReorderHeroSlides,
+      handleDeleteHeroSlide,
+      handleSavePromoBanner,
+      handleReorderPromoBanners,
       handleSaveService,
       handleDeleteService,
       handleUpdateRequestStatus,
+      handleDeleteCustomerRequest,
+      handleResetDemoData,
       setSettings,
     }),
     [
@@ -695,6 +970,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       brands,
       useCaseTags,
       offers,
+      heroSlides,
+      promoBanners,
       customerRequests,
       services,
       selectedServiceId,
@@ -716,13 +993,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       handleDeleteProduct,
       handleToggleBestSeller,
       handleSaveCategory,
+      handleDeleteCategory,
       handleSaveBrand,
+      handleDeleteBrand,
       handleSaveUseCaseTag,
+      handleDeleteUseCaseTag,
       handleSaveOffer,
       handleDeleteOffer,
+      handleSaveHeroSlide,
+      handleReorderHeroSlides,
+      handleDeleteHeroSlide,
+      handleSavePromoBanner,
+      handleReorderPromoBanners,
       handleSaveService,
       handleDeleteService,
       handleUpdateRequestStatus,
+      handleDeleteCustomerRequest,
+      handleResetDemoData,
     ]
   );
 

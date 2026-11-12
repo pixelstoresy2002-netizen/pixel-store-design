@@ -2,8 +2,10 @@ import {
   Brand,
   Category,
   CustomerRequest,
+  HeroSlide,
   Offer,
   Product,
+  PromoBanner,
   StoreService,
   StoreSettings,
   UseCaseTag,
@@ -54,7 +56,6 @@ export const INITIAL_BRANDS: Brand[] = [
   { id: 'moondrop', name: 'Moondrop Audio', country: { ar: 'الصين', en: 'China' }, featured: false },
   { id: 'anker', name: 'Anker', country: { ar: 'الصين', en: 'China' }, featured: false },
 ];
-
 export const INITIAL_USE_CASE_TAGS: UseCaseTag[] = [
   {
     id: 'gaming',
@@ -63,7 +64,7 @@ export const INITIAL_USE_CASE_TAGS: UseCaseTag[] = [
       ar: 'استجابة فائقة، إضاءة RGB، ومعدلات تحديث عالية للمحترفين',
       en: 'Ultra-low latency, high polling rates, and tournament-grade performance',
     },
-    applicableCategories: ['laptops', 'accessories', 'keyboards', 'mice', 'audio', 'pc-builds'],
+    applicableCategories: ['laptops', 'pc-components', 'accessories', 'keyboards', 'mice', 'audio', 'pc-builds'],
     accentColor: 'purple',
     visualKey: 'usecase-gaming',
   },
@@ -85,7 +86,7 @@ export const INITIAL_USE_CASE_TAGS: UseCaseTag[] = [
       ar: 'أداء موثوق للبرمجة، التصميم الهندسي، والمحاضرات الجامعية',
       en: 'Dependable battery life and compute power for coding, CAD, and university',
     },
-    applicableCategories: ['laptops', 'pc-builds'],
+    applicableCategories: ['laptops', 'pc-components', 'pc-builds'],
     accentColor: 'pink',
     visualKey: 'usecase-work',
   },
@@ -1434,10 +1435,22 @@ export const INITIAL_SERVICES: StoreService[] = [
       ar: 'تنظيف منظومة التبريد وتجديد المعاجين الحرارية للحد من ارتفاع الحرارة والحفاظ على استقرار الأداء',
       en: 'Cooling system cleaning and thermal interface renewal to help manage operating temperatures and sustain stable performance',
     },
+    summary: {
+      ar: 'صيانة حرارية متخصصة تشمل تنظيف المراوح والمشتتات واستبدال المعجون والوسائد الحرارية بمواد احترافية مع فحص قبل وبعد الصيانة.',
+      en: 'Specialized thermal servicing including heatsink/fan cleaning, thermal paste & pad renewal, and pre/post temperature verification.',
+    },
     description: {
       ar: 'خدمة صيانة فنية لمعالجة تراكم الغبار وجفاف المعجون الحراري في أجهزة اللابتوب وتجميعات الكمبيوتر المكتبية، مع معاينة درجات الحرارة واستقرار التردد قبل وبعد الصيانة.',
       en: 'Technical maintenance service addressing dust buildup and dried thermal compound in laptops and desktop PCs, including pre- and post-service thermal and stability checks.',
     },
+    primaryImage: '/assets/services/cooling-1.svg',
+    galleryImages: [
+      '/assets/services/cooling-1.svg',
+      '/assets/services/cooling-2.svg',
+      '/assets/services/cooling-3.svg',
+      '/assets/services/cooling-4.svg',
+      '/assets/services/cooling-5.svg',
+    ],
     iconKey: 'cooling',
     badge: {
       ar: 'خدمة صيانة وتبريد متخصصة',
@@ -1526,10 +1539,22 @@ export const INITIAL_SERVICES: StoreService[] = [
       ar: 'فحص شامل للأعطال، ترقية الذواكر ووحدات التخزين، وتجميع الكيسات الاحترافية مع إدارة كابلات نظيفة',
       en: 'Complete hardware diagnostics, RAM/NVMe upgrades, BIOS tuning, and custom PC assembly with clean cable management',
     },
+    summary: {
+      ar: 'تشخيص دقيق لأعطال اللابتوب والـ PC، ترقية رامات DDR4/DDR5 وأقراص NVMe، وتجميع احترافي مع ضبط BIOS.',
+      en: 'Comprehensive laptop and PC diagnostics, DDR4/DDR5 & NVMe upgrades, and clean custom rig assembly with BIOS tuning.',
+    },
     description: {
       ar: 'فريق تقني متخصص في تشخيص أعطال الهاردوير، ترقية اللابتوبات والكمبيوترات المكتبية، وتهيئة أنظمة التشغيل والتعريفات الرسمية لضمان استقرار الأداء في الألعاب وبرامج العمل.',
       en: 'Hardware diagnostics, memory and storage upgrades, BIOS/EXPO configuration, and clean OS/driver setup for gaming and workstation systems.',
     },
+    primaryImage: '/assets/services/maintenance-1.svg',
+    galleryImages: [
+      '/assets/services/maintenance-1.svg',
+      '/assets/services/maintenance-2.svg',
+      '/assets/services/maintenance-3.svg',
+      '/assets/services/maintenance-4.svg',
+      '/assets/services/maintenance-5.svg',
+    ],
     iconKey: 'maintenance',
     badge: {
       ar: 'صيانة وفحص فني',
@@ -1600,10 +1625,22 @@ export const INITIAL_SERVICES: StoreService[] = [
       ar: 'توريد وتركيب وبرمجة أنظمة المراقبة الشبكية IP و CCTV للمتاجر والشركات والمنازل مع ربط بالهاتف',
       en: 'Supply, installation, and configuration of IP & HD CCTV surveillance systems for retail, offices, and homes with mobile monitoring',
     },
+    summary: {
+      ar: 'تجهيز متكامل لأنظمة كاميرات المراقبة IP و HD CCTV مع أجهزة التسجيل NVR/DVR والربط المباشر عبر تطبيق الهاتف.',
+      en: 'End-to-end IP & HD CCTV camera installations, NVR/DVR recording storage, and live mobile monitoring setup.',
+    },
     description: {
       ar: 'حلول مراقبة أمنية متكاملة تشمل معاينة الموقع، اختيار الكاميرات المناسبة (ليلية / خارجية / داخلية)، تمديد الشبكات، وبرمجة أجهزة التسجيل NVR/DVR مع المتابعة عن بُعد.',
       en: 'Security surveillance solutions including site evaluation, indoor/outdoor IP & CCTV cameras, cabling, NVR/DVR storage setup, and mobile viewing.',
     },
+    primaryImage: '/assets/services/cameras-1.svg',
+    galleryImages: [
+      '/assets/services/cameras-1.svg',
+      '/assets/services/cameras-2.svg',
+      '/assets/services/cameras-3.svg',
+      '/assets/services/cameras-4.svg',
+      '/assets/services/cameras-5.svg',
+    ],
     iconKey: 'cameras',
     badge: {
       ar: 'أنظمة مراقبة وتجهيز فني',
@@ -1662,5 +1699,187 @@ export const INITIAL_SERVICES: StoreService[] = [
         en: 'Walkthrough on mobile app usage and video clip export',
       },
     ],
+  },
+];
+
+export const INITIAL_HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'slide-1',
+    kicker: {
+      ar: 'تجميعات وكروت شاشة الجيل الجديد',
+      en: 'NEXT-GEN GPUS & CUSTOM RIGS',
+    },
+    title: {
+      ar: 'قوة الأداء الاحترافي للألعاب والرندر في مكان واحد',
+      en: 'Pro-Grade RTX 40-Series Rigs & Gaming Laptops',
+    },
+    subtitle: {
+      ar: 'تجميعات مختبرة بدقة، لابتوبات ROG و Lenovo، وقطع أصلية بتسعير واضح بالدولار والليرة السورية.',
+      en: 'Stress-tested custom PC builds, ROG & Lenovo laptops, and authentic components with transparent USD & SYP pricing.',
+    },
+    ctaLabel: {
+      ar: 'تصفح كروت الشاشة والقطع',
+      en: 'Explore PC Components',
+    },
+    visualKey: 'comp-gpu-front',
+    targetView: 'category',
+    targetCategory: 'pc-components',
+    accent: '#8E4DEB',
+    sortOrder: 1,
+    isActive: true,
+  },
+  {
+    id: 'slide-2',
+    kicker: {
+      ar: 'قسم اللابتوبات الجديدة والمستعملة النظيفة',
+      en: 'NEW & CLEAN TESTED USED LAPTOPS',
+    },
+    title: {
+      ar: 'اختر لابتوبك للألعاب أو الهندسة أو الدراسة الجامعية',
+      en: 'Laptops Curated for Gaming, Engineering & Study',
+    },
+    subtitle: {
+      ar: 'تشكيلة واسعة من اللابتوبات الجديدة بالكرتونة والمستعملة النظيفة المفحوصة بأسعار مدروسة.',
+      en: 'Compare factory-sealed new laptops and clean pre-owned machines inspected by our hardware specialists.',
+    },
+    ctaLabel: {
+      ar: 'استعرض قسم اللابتوبات',
+      en: 'Browse All Laptops',
+    },
+    visualKey: 'laptop-rog-front',
+    targetView: 'category',
+    targetCategory: 'laptops',
+    accent: '#D66C9D',
+    sortOrder: 2,
+    isActive: true,
+  },
+  {
+    id: 'slide-3',
+    kicker: {
+      ar: 'ملحقات الاحتراف والعمل المكتبي',
+      en: 'GAMING & ERGONOMIC OFFICE PERIPHERALS',
+    },
+    title: {
+      ar: 'لوحات مفاتيح، ماوسات فائقة الخفة، وسماعات IEM',
+      en: 'Mechanical Keyboards, 49g Esports Mice & Hi-Fi IEMs',
+    },
+    subtitle: {
+      ar: 'فرز ذكي حسب الاستخدام: اختر عتاد الألعاب التنافسية (Gaming) أو راحة العمل المكتبي الهادئ (Office).',
+      en: 'Shop by use case: tournament-ready optical switches or whisper-quiet ergonomic office peripherals.',
+    },
+    ctaLabel: {
+      ar: 'تصفح الإكسسوارات والملحقات',
+      en: 'Shop Peripherals',
+    },
+    visualKey: 'kb-huntsman-front',
+    targetView: 'category',
+    targetCategory: 'accessories',
+    accent: '#EF875D',
+    sortOrder: 3,
+    isActive: true,
+  },
+  {
+    id: 'slide-4',
+    kicker: {
+      ar: 'مختبر التجميع الاحترافي في بيكسل ستور',
+      en: 'PIXEL STORE CUSTOM PC BUILD LAB',
+    },
+    title: {
+      ar: 'تجميعات PC جاهزة للألعاب التنافسية والمونتاج الهندسي',
+      en: 'Ready-to-Run Gaming & Workstation PC Builds',
+    },
+    subtitle: {
+      ar: 'تنظيم كابلات احترافي، ضبط BIOS وترددات الرام، مع اختبار ضغط حراري شامل قبل التسليم.',
+      en: 'Precision cable management, XMP/EXPO tuning, and full thermal stress testing on every custom build.',
+    },
+    ctaLabel: {
+      ar: 'استعرض تجميعات PC',
+      en: 'Explore PC Builds',
+    },
+    visualKey: 'build-nebula-front',
+    targetView: 'category',
+    targetCategory: 'pc-builds',
+    accent: '#8E4DEB',
+    sortOrder: 4,
+    isActive: true,
+  },
+  {
+    id: 'slide-5',
+    kicker: {
+      ar: 'الصوتيات الاحترافية وحلول التبريد المتقدمة',
+      en: 'PRO AUDIO & THERMAL COOLING SOLUTIONS',
+    },
+    title: {
+      ar: 'سماعات ألعاب محيطية وخدمات صيانة وتبريد احترافية',
+      en: 'Studio IEMs, Gaming Headsets & Thermal Servicing',
+    },
+    subtitle: {
+      ar: 'تجربة صوتية دقيقة للألعاب التنافسية، مع قسم متخصص لحلول التبريد وخفض حرارة اللابتوبات.',
+      en: 'Pinpoint positional audio gear alongside our specialized laptop & GPU thermal servicing lab.',
+    },
+    ctaLabel: {
+      ar: 'تصفح الصوتيات والسماعات',
+      en: 'Explore Audio & Headsets',
+    },
+    visualKey: 'audio-iem-front',
+    targetView: 'category',
+    targetCategory: 'audio',
+    accent: '#D66C9D',
+    sortOrder: 5,
+    isActive: true,
+  },
+];
+
+export const INITIAL_PROMO_BANNERS: PromoBanner[] = [
+  {
+    id: 'promo-banner-1',
+    kicker: {
+      ar: 'قسم التجميع الاحترافي',
+      en: 'PIXEL BUILD STUDIO',
+    },
+    title: {
+      ar: 'تجميعات PC احترافية جاهزة ومختبرة',
+      en: 'Custom Gaming & Creator PC Builds',
+    },
+    subtitle: {
+      ar: 'تنظيم كابلات احترافي + اختبار ضغط حراري شامل',
+      en: 'Clean cable routing, BIOS tuning & thermal stress test',
+    },
+    ctaLabel: {
+      ar: 'استعرض التجميعات',
+      en: 'Explore Builds',
+    },
+    visualKey: 'build-nebula-front',
+    targetView: 'category',
+    targetCategory: 'pc-builds',
+    themeVariant: 'dark',
+    sortOrder: 1,
+    isActive: true,
+  },
+  {
+    id: 'promo-banner-2',
+    kicker: {
+      ar: 'فرز ذكي حسب الاستخدام',
+      en: 'USE-CASE SELECTOR',
+    },
+    title: {
+      ar: 'كيبوردات وماوسات: ألعاب أم عمل مكتبي؟',
+      en: 'Keyboards & Mice: Gaming vs. Office',
+    },
+    subtitle: {
+      ar: 'تصفح حسب طبيعة عملك بضغطة واحدة',
+      en: 'Filter effortlessly between esports speed and quiet office comfort',
+    },
+    ctaLabel: {
+      ar: 'جرب الاختيار حسب الاستخدام',
+      en: 'Try Use-Case View',
+    },
+    visualKey: 'kb-mxkeys-front',
+    targetView: 'category',
+    targetCategory: 'accessories',
+    targetSubcategory: 'keyboards',
+    themeVariant: 'contrast',
+    sortOrder: 2,
+    isActive: true,
   },
 ];

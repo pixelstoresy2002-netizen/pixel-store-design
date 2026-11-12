@@ -1,9 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  ArrowLeft,
-  ArrowRight,
   BarChart3,
   Boxes,
   CheckCircle2,
@@ -15,11 +13,19 @@ import {
   LayoutDashboard,
   MessageCircle,
   Plus,
+  RotateCcw,
+  Search,
   Settings,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Tag,
   Trash2,
   Wrench,
+  Presentation,
+  ChevronLeft,
+  ChevronRight,
+  Images,
 } from 'lucide-react';
 import {
   ArabicFontId,
@@ -28,32 +34,63 @@ import {
   Category,
   CustomerRequest,
   DesignThemeId,
+  HeroSlide,
   Language,
   Offer,
+  OfferTemporalStatus,
   Product,
   ProductCondition,
+  PromoBanner,
   StoreService,
   StoreSettings,
   UseCaseTag,
 } from '../../types/store';
 import {
+  calculateDiscountPercent,
   convertUsdToSyp,
   formatSyp,
   formatUsd,
+  getOfferTemporalStatus,
+  getServiceGalleryImages,
+  isExternalChannelVerified,
   isOfferActive,
+  isPhoneLinkVerified,
+  isWhatsappLinkVerified,
+  VISUAL_KEY_PRESETS,
 } from '../../utils/storeLogic';
+import {
+  AdminOffersQuery,
+  AdminProductsQuery,
+  AdminRequestsQuery,
+  DEFAULT_ADMIN_OFFERS_QUERY,
+  DEFAULT_ADMIN_PRODUCTS_QUERY,
+  DEFAULT_ADMIN_REQUESTS_QUERY,
+  parseAdminProductsQuery,
+  queryAdminOffers,
+  queryAdminProducts,
+  queryAdminRequests,
+  serializeAdminProductsQuery,
+} from '../../utils/adminQueryContract';
 import { CountdownBadge } from '../storefront/CountdownBadge';
 import { PixelLogo } from '../visuals/PixelLogo';
 import { ProductVisual } from '../visuals/ProductVisual';
+import { AdminProductEditor } from './AdminProductEditor';
+import { AdminBannersManager } from './AdminBannersManager';
+import {
+  AdminBrandsPanel,
+  AdminCategoriesPanel,
+  AdminUseCasesPanel,
+} from './AdminTaxonomyPanels';
 
 export type AdminTab =
   | 'overview'
   | 'products'
+  | 'banners'
+  | 'offers'
   | 'services'
   | 'categories'
   | 'brands'
   | 'usecases'
-  | 'offers'
   | 'requests'
   | 'analytics'
   | 'settings';
@@ -67,6 +104,8 @@ interface AdminDashboardProps {
   brands: Brand[];
   useCaseTags: UseCaseTag[];
   offers: Offer[];
+  heroSlides?: HeroSlide[];
+  promoBanners?: PromoBanner[];
   customerRequests: CustomerRequest[];
   services: StoreService[];
   settings: StoreSettings;
@@ -77,17 +116,28 @@ interface AdminDashboardProps {
   onDeleteProduct: (productId: string) => void;
   onToggleBestSeller: (productId: string) => void;
   onSaveCategory: (category: Category) => void;
+  onDeleteCategory?: (categoryId: string) => void;
   onSaveBrand: (brand: Brand) => void;
+  onDeleteBrand?: (brandId: string) => void;
   onSaveUseCaseTag: (tag: UseCaseTag) => void;
+  onDeleteUseCaseTag?: (tagId: string) => void;
   onSaveOffer: (offer: Offer) => void;
   onDeleteOffer: (offerId: string) => void;
+  onSaveHeroSlide?: (slide: HeroSlide) => void;
+  onReorderHeroSlides?: (slides: HeroSlide[]) => void;
+  onDeleteHeroSlide?: (slideId: string) => void;
+  onSavePromoBanner?: (banner: PromoBanner) => void;
+  onReorderPromoBanners?: (banners: PromoBanner[]) => void;
   onSaveService: (service: StoreService) => void;
   onDeleteService: (serviceId: string) => void;
   onUpdateRequestStatus: (
     requestId: string,
-    status: CustomerRequest['status']
+    status: CustomerRequest['status'],
+    adminNote?: string
   ) => void;
+  onDeleteCustomerRequest?: (requestId: string) => void;
   onUpdateSettings: (nextSettings: StoreSettings) => void;
+  onResetDemoData?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -97,6 +147,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   brands,
   useCaseTags,
   offers,
+  heroSlides = [],
+  promoBanners = [],
   customerRequests,
   services,
   settings,
@@ -107,66 +159,127 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteProduct,
   onToggleBestSeller,
   onSaveCategory,
+  onDeleteCategory = () => {},
   onSaveBrand,
+  onDeleteBrand = () => {},
   onSaveUseCaseTag,
+  onDeleteUseCaseTag = () => {},
   onSaveOffer,
   onDeleteOffer,
+  onSaveHeroSlide = () => {},
+  onReorderHeroSlides = () => {},
+  onDeleteHeroSlide = () => {},
+  onSavePromoBanner = () => {},
+  onReorderPromoBanners = () => {},
   onSaveService,
   onDeleteService,
   onUpdateRequestStatus,
+  onDeleteCustomerRequest = () => {},
   onUpdateSettings,
+  onResetDemoData,
 }) => {
+  const isAr = lang === 'ar';
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
-  // Product Editor State
+  // Product Editor & Query State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [includeLaptopSpecs, setIncludeLaptopSpecs] = useState(false);
-  const [confirmDeleteProductId, setConfirmDeleteProductId] = useState<
-    string | null
-  >(null);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [confirmDeleteProductId, setConfirmDeleteProductId] = useState<string | null>(null);
+  const [productsQuery, setProductsQuery] = useState<AdminProductsQuery>(
+    DEFAULT_ADMIN_PRODUCTS_QUERY
+  );
+
+  // Offers Editor & Query State
+  const [offersQuery, setOffersQuery] = useState<AdminOffersQuery>(
+    DEFAULT_ADMIN_OFFERS_QUERY
+  );
+  const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
+  const [offerProductId, setOfferProductId] = useState(products[0]?.id ?? '');
+  const [offerTitleAr, setOfferTitleAr] = useState('عرض خاص لنهاية الأسبوع');
+  const [offerTitleEn, setOfferTitleEn] = useState('Weekend Special Deal');
+  const [offerBadgeAr, setOfferBadgeAr] = useState('عرض حصري');
+  const [offerBadgeEn, setOfferBadgeEn] = useState('Exclusive Deal');
+  const [offerPriceUsd, setOfferPriceUsd] = useState(850);
+  const [offerStartIso, setOfferStartIso] = useState(() =>
+    new Date(nowMs - 3600 * 1000).toISOString().slice(0, 16)
+  );
+  const [offerEndIso, setOfferEndIso] = useState(() =>
+    new Date(nowMs + 48 * 3600 * 1000).toISOString().slice(0, 16)
+  );
+  const [offerExclusive, setOfferExclusive] = useState(true);
+
+  // Customer Requests Query State
+  const [requestsQuery, setRequestsQuery] = useState<AdminRequestsQuery>(
+    DEFAULT_ADMIN_REQUESTS_QUERY
+  );
+  const [editingRequestNoteId, setEditingRequestNoteId] = useState<string | null>(null);
+  const [requestAdminNoteDraft, setRequestAdminNoteDraft] = useState('');
 
   // Service Editor State
-  const [editingService, setEditingService] = useState<StoreService | null>(
-    null
-  );
-
-  // Offer Creator State
-  const [newOfferProductId, setNewOfferProductId] = useState(
-    products[0]?.id ?? ''
-  );
-  const [newOfferTitleAr, setNewOfferTitleAr] = useState('عرض خاص لنهاية الأسبوع');
-  const [newOfferTitleEn, setNewOfferTitleEn] = useState('Weekend Special Deal');
-  const [newOfferPriceUsd, setNewOfferPriceUsd] = useState(850);
-  const [newOfferDurationHours, setNewOfferDurationHours] = useState(48);
-  const [newOfferExclusive, setNewOfferExclusive] = useState(true);
-
-  // Category Quick Add State
-  const [newCatNameAr, setNewCatNameAr] = useState('');
-  const [newCatNameEn, setNewCatNameEn] = useState('');
-  const [newCatParentId, setNewCatParentId] = useState<string>('NONE');
-
-  // Brand Quick Add State
-  const [newBrandName, setNewBrandName] = useState('');
-  const [newBrandCountryAr, setNewBrandCountryAr] = useState('تايوان');
-  const [newBrandCountryEn, setNewBrandCountryEn] = useState('Taiwan');
-
-  // Use-Case Quick Add State
-  const [newTagAr, setNewTagAr] = useState('');
-  const [newTagEn, setNewTagEn] = useState('');
+  const [editingService, setEditingService] = useState<StoreService | null>(null);
 
   // Store Settings Local Form State
   const [localSettings, setLocalSettings] = useState<StoreSettings>(settings);
 
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  // Initialize tab & product query state from URL on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab') as AdminTab | null;
+    if (
+      tabParam &&
+      [
+        'overview',
+        'products',
+        'banners',
+        'offers',
+        'services',
+        'categories',
+        'brands',
+        'usecases',
+        'requests',
+        'analytics',
+        'settings',
+      ].includes(tabParam)
+    ) {
+      setActiveTab(tabParam);
+    }
+    const parsedProdQuery = parseAdminProductsQuery(params);
+    setProductsQuery(parsedProdQuery);
+  }, []);
+
+  // Sync URL query params when activeTab or productsQuery changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams();
+    if (activeTab !== 'overview') {
+      params.set('tab', activeTab);
+    }
+    if (activeTab === 'products') {
+      const prodParams = new URLSearchParams(
+        serializeAdminProductsQuery(productsQuery)
+      );
+      prodParams.forEach((val, key) => params.set(key, val));
+    }
+    const qs = params.toString();
+    const nextUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, '', nextUrl);
+  }, [activeTab, productsQuery]);
+
   const showToast = (msgAr: string, msgEn: string) => {
     setSavedToast(lang === 'ar' ? msgAr : msgEn);
-    setTimeout(() => setSavedToast(null), 3000);
+    setTimeout(() => setSavedToast(null), 3200);
   };
 
   const openProductEditor = (prod?: Product) => {
     if (prod) {
+      setIsCreatingProduct(false);
       setEditingProduct({ ...prod });
-      setIncludeLaptopSpecs(Boolean(prod.laptopSpecs));
     } else {
       const fresh: Product = {
         id: `prod-${Date.now()}`,
@@ -192,6 +305,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isBestSeller: false,
         isNewArrival: true,
         isFeatured: false,
+        isActive: true,
         laptopSpecs: {
           processor: 'Intel Core i7-13650HX',
           memory: '16GB DDR5',
@@ -205,13 +319,93 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           },
         ],
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
+      setIsCreatingProduct(true);
       setEditingProduct(fresh);
-      setIncludeLaptopSpecs(true);
     }
   };
 
+  const closeProductEditor = () => {
+    setIsCreatingProduct(false);
+    setEditingProduct(null);
+  };
 
+  // Start editing an existing offer
+  const startEditOffer = (offer: Offer) => {
+    setEditingOfferId(offer.id);
+    setOfferProductId(offer.productId);
+    setOfferTitleAr(offer.title.ar);
+    setOfferTitleEn(offer.title.en);
+    setOfferBadgeAr(offer.badgeText.ar);
+    setOfferBadgeEn(offer.badgeText.en);
+    setOfferPriceUsd(offer.offerPriceUsd);
+    setOfferStartIso(new Date(offer.startTime).toISOString().slice(0, 16));
+    setOfferEndIso(new Date(offer.endTime).toISOString().slice(0, 16));
+    setOfferExclusive(offer.isExclusive);
+  };
+
+  const resetOfferForm = () => {
+    setEditingOfferId(null);
+    const firstProd = products[0];
+    setOfferProductId(firstProd?.id ?? '');
+    setOfferTitleAr('عرض خاص لنهاية الأسبوع');
+    setOfferTitleEn('Weekend Special Deal');
+    setOfferBadgeAr('عرض حصري');
+    setOfferBadgeEn('Exclusive Deal');
+    setOfferPriceUsd(firstProd ? Math.round(firstProd.priceUsd * 0.88) : 850);
+    setOfferStartIso(new Date(nowMs - 60000).toISOString().slice(0, 16));
+    setOfferEndIso(new Date(nowMs + 48 * 3600 * 1000).toISOString().slice(0, 16));
+    setOfferExclusive(true);
+  };
+
+  // Queried & paginated results
+  const productsResult = useMemo(
+    () => queryAdminProducts(products, offers, productsQuery, nowMs),
+    [products, offers, productsQuery, nowMs]
+  );
+
+  const offersResult = useMemo(
+    () =>
+      queryAdminOffers(
+        offers,
+        products,
+        offersQuery,
+        nowMs,
+        settings.usdToSypRate
+      ),
+    [offers, products, offersQuery, nowMs, settings.usdToSypRate]
+  );
+
+  const requestsResult = useMemo(
+    () => queryAdminRequests(customerRequests, requestsQuery),
+    [customerRequests, requestsQuery]
+  );
+
+  const rootCategories = useMemo(
+    () => categories.filter((c) => !c.parentId),
+    [categories]
+  );
+
+  const selectedFilterSubcategories = useMemo(
+    () =>
+      productsQuery.categoryId === 'ALL'
+        ? categories.filter((c) => Boolean(c.parentId))
+        : categories.filter((c) => c.parentId === productsQuery.categoryId),
+    [categories, productsQuery.categoryId]
+  );
+
+  const hasActiveProductFilters =
+    productsQuery.q !== '' ||
+    productsQuery.categoryId !== 'ALL' ||
+    productsQuery.subcategoryId !== 'ALL' ||
+    productsQuery.brandId !== 'ALL' ||
+    productsQuery.condition !== 'ALL' ||
+    productsQuery.availability !== 'ALL' ||
+    productsQuery.useCaseId !== 'ALL' ||
+    productsQuery.bestSeller !== 'ALL' ||
+    productsQuery.newArrival !== 'ALL' ||
+    productsQuery.hasOffer !== 'ALL';
 
   const navItems: {
     id: AdminTab;
@@ -231,10 +425,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       badge: products.length,
     },
     {
-      id: 'services',
-      label: { ar: 'إدارة الخدمات (Services)', en: 'Services Management' },
-      icon: <Wrench className="w-4 h-4" />,
-      badge: services.length,
+      id: 'banners',
+      label: { ar: 'البانرات والسلايدر الرئيسي', en: 'Hero & Promo Banners' },
+      icon: <Presentation className="w-4 h-4" />,
+      badge: heroSlides.length + promoBanners.length,
     },
     {
       id: 'offers',
@@ -243,25 +437,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       badge: offers.filter((o) => isOfferActive(o, nowMs)).length,
     },
     {
-      id: 'requests',
-      label: { ar: 'طلبات الزبائن (واتساب)', en: 'Customer Requests' },
-      icon: <MessageCircle className="w-4 h-4" />,
-      badge: customerRequests.filter((r) => r.status === 'NEW').length,
+      id: 'services',
+      label: { ar: 'إدارة الخدمات (Services)', en: 'Services Management' },
+      icon: <Wrench className="w-4 h-4" />,
+      badge: services.length,
     },
     {
       id: 'categories',
-      label: { ar: 'الأقسام والفروع', en: 'Categories' },
+      label: { ar: 'الأقسام والفروع', en: 'Categories & Tree' },
       icon: <FolderTree className="w-4 h-4" />,
-    },
-    {
-      id: 'usecases',
-      label: { ar: 'وسوم الاستخدام (Use Cases)', en: 'Use-Case Tags' },
-      icon: <Sparkles className="w-4 h-4" />,
+      badge: categories.length,
     },
     {
       id: 'brands',
       label: { ar: 'العلامات التجارية', en: 'Brands' },
       icon: <Tag className="w-4 h-4" />,
+      badge: brands.length,
+    },
+    {
+      id: 'usecases',
+      label: { ar: 'وسوم الاستخدام (Use Cases)', en: 'Use-Case Tags' },
+      icon: <Sparkles className="w-4 h-4" />,
+      badge: useCaseTags.length,
+    },
+    {
+      id: 'requests',
+      label: { ar: 'طلبات الزبائن (واتساب)', en: 'Customer Requests' },
+      icon: <MessageCircle className="w-4 h-4" />,
+      badge: customerRequests.filter((r) => r.status === 'NEW').length,
     },
     {
       id: 'analytics',
@@ -275,7 +478,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     },
   ];
 
-  const BackArrow = lang === 'ar' ? ArrowRight : ArrowLeft;
+  const selectedOfferProduct = products.find((p) => p.id === offerProductId);
+  const previewDiscountPct = selectedOfferProduct
+    ? calculateDiscountPercent(selectedOfferProduct.priceUsd, offerPriceUsd)
+    : 0;
 
   return (
     <div
@@ -344,7 +550,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 data-testid={`admin-tab-${item.id}`}
                 onClick={() => {
                   setActiveTab(item.id);
-                  setEditingProduct(null);
+                  closeProductEditor();
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                   active
@@ -388,21 +594,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {lang === 'ar'
-                      ? 'متابعة فورية لطلبات الزبائن عبر واتساب، العروض الموقوتة، وسعر الصرف اليومي'
-                      : 'Monitor incoming WhatsApp product requests, active timed deals, and catalog inventory'}
+                      ? 'متابعة فورية لطلبات الزبائن عبر واتساب، العروض الموقوتة، البانرات الترويجية، وسعر الصرف اليومي'
+                      : 'Monitor incoming WhatsApp product requests, active timed deals, hero banners, and catalog inventory'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setActiveTab('products');
                       openProductEditor();
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#8E4DEB] text-white text-xs font-bold"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{lang === 'ar' ? 'إضافة منتج جديد' : 'Add Product'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('banners')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
+                  >
+                    <Presentation className="w-4 h-4" />
+                    <span>{lang === 'ar' ? 'تعديل البانرات' : 'Manage Banners'}</span>
                   </button>
                 </div>
               </div>
@@ -431,8 +645,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1">
                     {lang === 'ar'
-                      ? 'مرتبطة بمؤقت تنازلي تلقائي'
-                      : 'Auto-expiring promotional windows'}
+                      ? `من أصل ${offers.length} عرض مسجل`
+                      : `Out of ${offers.length} total offers`}
                   </div>
                 </div>
 
@@ -466,7 +680,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('settings')}
-                    className="text-[11px] font-bold text-[#8E4DEB] hover:underline mt-1"
+                    className="text-[11px] font-bold text-[#8E4DEB] hover:underline mt-1 cursor-pointer"
                   >
                     {lang === 'ar' ? 'تعديل سعر الصرف' : 'Update Rate'}
                   </button>
@@ -484,7 +698,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('requests')}
-                    className="text-xs font-bold text-[#8E4DEB] hover:underline"
+                    className="text-xs font-bold text-[#8E4DEB] hover:underline cursor-pointer"
                   >
                     {lang === 'ar' ? 'عرض جميع الطلبات' : 'View All Requests'}
                   </button>
@@ -512,68 +726,92 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {customerRequests.slice(0, 4).map((req) => (
-                        <tr key={req.id}>
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-[#111318]">
-                              {req.customerName}
-                            </div>
-                            <div
-                              className="font-mono-num text-[11px] text-slate-500"
-                              dir="ltr"
-                            >
-                              {req.phoneNumber}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="font-semibold text-[#111318] max-w-xs truncate">
-                              {req.productName[lang]}
-                            </div>
-                            {req.note && (
-                              <div className="text-[11px] text-slate-500 truncate max-w-xs">
-                                “{req.note}”
+                      {customerRequests.slice(0, 4).map((req) => {
+                        const phoneVerified = isPhoneLinkVerified(req.phoneNumber);
+                        return (
+                          <tr key={req.id}>
+                            <td className="py-3 px-3">
+                              <div className="font-bold text-[#111318]">
+                                {req.customerName}
                               </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 font-mono-num">
-                            <div className="font-bold text-[#111318]" dir="ltr">
-                              {formatUsd(req.priceUsdAtRequest)}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {formatSyp(req.priceSypAtRequest, lang)}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`font-bold ${
-                                req.status === 'NEW'
-                                  ? 'text-amber-600'
-                                  : req.status === 'CONTACTED'
-                                  ? 'text-[#8E4DEB]'
-                                  : 'text-emerald-600'
-                              }`}
-                            >
-                              {req.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-end">
-                            <a
-                              href={`https://wa.me/${req.phoneNumber.replace(
-                                /\D/g,
-                                ''
-                              )}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              <span>
-                                {lang === 'ar' ? 'مراسلة واتساب' : 'WhatsApp'}
+                              <div
+                                className="font-mono-num text-[11px] text-slate-500 flex items-center gap-1"
+                                dir="ltr"
+                              >
+                                <span>{req.phoneNumber}</span>
+                                {!phoneVerified && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-sans">
+                                    Demo
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="font-semibold text-[#111318] max-w-xs truncate">
+                                {req.productName[lang]}
+                              </div>
+                              {req.note && (
+                                <div className="text-[11px] text-slate-500 truncate max-w-xs">
+                                  “{req.note}”
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 font-mono-num">
+                              <div className="font-bold text-[#111318]" dir="ltr">
+                                {formatUsd(req.priceUsdAtRequest)}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {formatSyp(req.priceSypAtRequest, lang)}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span
+                                className={`font-bold ${
+                                  req.status === 'NEW'
+                                    ? 'text-amber-600'
+                                    : req.status === 'CONTACTED'
+                                    ? 'text-[#8E4DEB]'
+                                    : 'text-emerald-600'
+                                }`}
+                              >
+                                {req.status}
                               </span>
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="py-3 px-3 text-end">
+                              {phoneVerified ? (
+                                <a
+                                  href={`https://wa.me/${req.phoneNumber.replace(
+                                    /\D/g,
+                                    ''
+                                  )}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>
+                                    {lang === 'ar' ? 'مراسلة واتساب' : 'WhatsApp'}
+                                  </span>
+                                </a>
+                              ) : (
+                                <span
+                                  title={
+                                    isAr
+                                      ? 'رقم تجريبي للعرض — أدخل رقماً حقيقياً لتفعيل المراسلة'
+                                      : 'Demo placeholder phone number'
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-bold cursor-not-allowed"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>
+                                    {lang === 'ar' ? 'رقم تجريبي' : 'Demo Number'}
+                                  </span>
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -585,500 +823,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {activeTab === 'products' && (
             <div className="space-y-6">
               {editingProduct ? (
-                <div className="bg-white rounded-xl border border-slate-200/90 p-6 space-y-6">
-                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                    <div>
-                      <h2 className="text-base font-extrabold text-[#111318]">
-                        {lang === 'ar'
-                          ? 'محرر المنتج (Product Editor)'
-                          : 'Product Editor'}
-                      </h2>
-                      <p className="text-xs text-slate-500">
-                        {lang === 'ar'
-                          ? 'يدعم السعر الأساسي بالدولار، حالة NEW/USED، خيار الأكثر مبيعاً، ومواصفات اللابتوب الـ 4'
-                          : 'Configure USD base price, NEW/USED condition, manual Best Seller flag, and optional 4-field Laptop specs'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingProduct(null)}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-[#111318]"
-                    >
-                      <BackArrow className="w-3.5 h-3.5" />
-                      <span>
-                        {lang === 'ar' ? 'العودة للقائمة' : 'Back to List'}
-                      </span>
-                    </button>
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const finalProd: Product = {
-                        ...editingProduct,
-                        laptopSpecs: includeLaptopSpecs
-                          ? editingProduct.laptopSpecs ?? {
-                              processor: '',
-                              memory: '',
-                              storage: '',
-                              display: '',
-                            }
-                          : undefined,
-                      };
-                      onSaveProduct(finalProd);
-                      setEditingProduct(null);
-                      showToast(
-                        'تم حفظ بيانات المنتج بنجاح',
-                        'Product saved successfully'
-                      );
-                    }}
-                    className="space-y-5"
-                  >
-                    {/* Bilingual Product Names */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar'
-                            ? 'اسم المنتج (بالعربية) *'
-                            : 'Product Name (Arabic) *'}
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={editingProduct.name.ar}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              name: { ...editingProduct.name, ar: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar'
-                            ? 'اسم المنتج (بالإنكليزية) *'
-                            : 'Product Name (English) *'}
-                        </label>
-                        <input
-                          type="text"
-                          dir="ltr"
-                          required
-                          value={editingProduct.name.en}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              name: { ...editingProduct.name, en: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Category, Subcategory, Brand, SKU */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar' ? 'القسم الرئيسي' : 'Category'}
-                        </label>
-                        <select
-                          value={editingProduct.categoryId}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              categoryId: e.target.value,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                        >
-                          {categories
-                            .filter((c) => !c.parentId)
-                            .map((cat) => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.name[lang]}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar' ? 'القسم الفرعي' : 'Subcategory'}
-                        </label>
-                        <select
-                          value={editingProduct.subcategoryId ?? ''}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              subcategoryId: e.target.value || undefined,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                        >
-                          <option value="">
-                            {lang === 'ar' ? 'بدون فرع' : 'None'}
-                          </option>
-                          {categories
-                            .filter(
-                              (c) => c.parentId === editingProduct.categoryId
-                            )
-                            .map((sub) => (
-                              <option key={sub.id} value={sub.id}>
-                                {sub.name[lang]}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar' ? 'العلامة التجارية' : 'Brand'}
-                        </label>
-                        <select
-                          value={editingProduct.brandId}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              brandId: e.target.value,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                        >
-                          {brands.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          SKU
-                        </label>
-                        <input
-                          type="text"
-                          dir="ltr"
-                          value={editingProduct.sku}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              sku: e.target.value,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Single USD Base Price + Auto SYP Preview + Condition (NEW/USED) + Availability */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-[#F4F3F7]">
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar'
-                            ? 'السعر الأساسي (USD $) *'
-                            : 'Base Price (USD $) *'}
-                        </label>
-                        <input
-                          type="number"
-                          dir="ltr"
-                          min={1}
-                          required
-                          value={editingProduct.priceUsd}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              priceUsd: Number(e.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono-num font-bold"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">
-                          {lang === 'ar'
-                            ? 'السعر المحول تلقائياً (SYP)'
-                            : 'Auto-Converted SYP (Read-Only)'}
-                        </label>
-                        <div className="px-3 py-2 rounded-lg bg-slate-200/70 text-xs font-mono-num font-bold text-[#8E4DEB]">
-                          {formatSyp(
-                            convertUsdToSyp(
-                              editingProduct.priceUsd,
-                              settings.usdToSypRate
-                            ),
-                            lang
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar'
-                            ? 'الحالة (NEW / USED فقط)'
-                            : 'Condition (NEW / USED)'}
-                        </label>
-                        <select
-                          value={editingProduct.condition}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              condition: e.target.value as ProductCondition,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold"
-                        >
-                          <option value="NEW">NEW (جديد)</option>
-                          <option value="USED">USED (مستعمل)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-[#111318] mb-1">
-                          {lang === 'ar' ? 'حالة التوفر' : 'Availability'}
-                        </label>
-                        <select
-                          value={editingProduct.availability}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              availability: e.target.value as AvailabilityStatus,
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold"
-                        >
-                          <option value="IN_STOCK">In Stock (متوفر)</option>
-                          <option value="ON_REQUEST">On Request (حسب الطلب)</option>
-                          <option value="OUT_OF_STOCK">Out of Stock (غير متوفر)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Merchandising Flags: Best Seller (Manual Flag), New Arrival, Featured */}
-                    <div className="flex flex-wrap items-center gap-6 p-4 rounded-xl border border-slate-200">
-                      <label className="flex items-center gap-2 text-xs font-bold text-[#111318] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editingProduct.isBestSeller}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              isBestSeller: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#8E4DEB]"
-                        />
-                        <span>
-                          {lang === 'ar'
-                            ? 'تعيين كـ "الأكثر مبيعاً" (Best Seller Flag)'
-                            : 'Manual Best Seller Flag'}
-                        </span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs font-bold text-[#111318] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editingProduct.isNewArrival}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              isNewArrival: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#8E4DEB]"
-                        />
-                        <span>
-                          {lang === 'ar'
-                            ? 'وصل حديثاً (New Arrival)'
-                            : 'New Arrival Flag'}
-                        </span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs font-bold text-[#111318] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editingProduct.isFeatured}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              isFeatured: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#8E4DEB]"
-                        />
-                        <span>
-                          {lang === 'ar'
-                            ? 'منتج مميز (Featured)'
-                            : 'Featured Flag'}
-                        </span>
-                      </label>
-                    </div>
-
-                    {/* Optional 4-Field Laptop Specifications */}
-                    <div className="p-4 rounded-xl border border-slate-200 space-y-3">
-                      <label className="flex items-center gap-2 text-xs font-extrabold text-[#8E4DEB] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={includeLaptopSpecs}
-                          onChange={(e) =>
-                            setIncludeLaptopSpecs(e.target.checked)
-                          }
-                          className="rounded text-[#8E4DEB]"
-                        />
-                        <span>
-                          {lang === 'ar'
-                            ? 'تفعيل الحقول الأربعة الخاصة باللابتوبات (Processor / Memory / Storage / Display)'
-                            : 'Enable 4-Field Laptop Specifications (Processor, Memory, Storage, Display)'}
-                        </span>
-                      </label>
-
-                      {includeLaptopSpecs && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                              Processor (المعالج)
-                            </label>
-                            <input
-                              type="text"
-                              dir="ltr"
-                              value={editingProduct.laptopSpecs?.processor ?? ''}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...editingProduct,
-                                  laptopSpecs: {
-                                    processor: e.target.value,
-                                    memory:
-                                      editingProduct.laptopSpecs?.memory ?? '',
-                                    storage:
-                                      editingProduct.laptopSpecs?.storage ?? '',
-                                    display:
-                                      editingProduct.laptopSpecs?.display ?? '',
-                                  },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 rounded border border-slate-300 text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                              Memory / RAM (الرام)
-                            </label>
-                            <input
-                              type="text"
-                              dir="ltr"
-                              value={editingProduct.laptopSpecs?.memory ?? ''}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...editingProduct,
-                                  laptopSpecs: {
-                                    processor:
-                                      editingProduct.laptopSpecs?.processor ?? '',
-                                    memory: e.target.value,
-                                    storage:
-                                      editingProduct.laptopSpecs?.storage ?? '',
-                                    display:
-                                      editingProduct.laptopSpecs?.display ?? '',
-                                  },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 rounded border border-slate-300 text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                              Storage (التخزين)
-                            </label>
-                            <input
-                              type="text"
-                              dir="ltr"
-                              value={editingProduct.laptopSpecs?.storage ?? ''}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...editingProduct,
-                                  laptopSpecs: {
-                                    processor:
-                                      editingProduct.laptopSpecs?.processor ?? '',
-                                    memory:
-                                      editingProduct.laptopSpecs?.memory ?? '',
-                                    storage: e.target.value,
-                                    display:
-                                      editingProduct.laptopSpecs?.display ?? '',
-                                  },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 rounded border border-slate-300 text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                              Display (الشاشة)
-                            </label>
-                            <input
-                              type="text"
-                              dir="ltr"
-                              value={editingProduct.laptopSpecs?.display ?? ''}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...editingProduct,
-                                  laptopSpecs: {
-                                    processor:
-                                      editingProduct.laptopSpecs?.processor ?? '',
-                                    memory:
-                                      editingProduct.laptopSpecs?.memory ?? '',
-                                    storage:
-                                      editingProduct.laptopSpecs?.storage ?? '',
-                                    display: e.target.value,
-                                  },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 rounded border border-slate-300 text-xs"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct(null)}
-                        className="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100"
-                      >
-                        {lang === 'ar' ? 'إلغاء' : 'Cancel'}
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-5 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold"
-                      >
-                        {lang === 'ar' ? 'حفظ المنتج' : 'Save Product'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
+                <AdminProductEditor
+                  product={editingProduct}
+                  isNew={isCreatingProduct}
+                  categories={categories}
+                  brands={brands}
+                  useCaseTags={useCaseTags}
+                  offers={offers}
+                  usdToSypRate={settings.usdToSypRate}
+                  nowMs={nowMs}
+                  lang={lang}
+                  onCancel={closeProductEditor}
+                  onManageOfferForProduct={(prodId) => {
+                    closeProductEditor();
+                    setActiveTab('offers');
+                    setOfferProductId(prodId);
+                  }}
+                  onSave={(savedProd) => {
+                    onSaveProduct(savedProd);
+                    closeProductEditor();
+                    showToast(
+                      'تم حفظ بيانات المنتج ومعرض الصور بنجاح',
+                      'Product and 5-image gallery saved successfully'
+                    );
+                  }}
+                />
               ) : (
                 <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
+                  {/* Top Header & New Product Button */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h1 className="text-base font-extrabold text-[#111318]">
                         {lang === 'ar'
-                          ? 'إدارة المنتجات (Products Catalog)'
-                          : 'Products Management'}
+                          ? 'إدارة المنتجات (Products Catalog & Filter Engine)'
+                          : 'Products Management & Query Engine'}
                       </h1>
                       <p className="text-xs text-slate-500">
                         {lang === 'ar'
-                          ? 'يمكنك تعديل أي منتج أو تفعيل/إلغاء شارة الأكثر مبيعاً (Best Seller) مباشرة'
-                          : 'Edit product specs, USD pricing, or toggle the manual Best Seller flag directly'}
+                          ? `عرض ${productsResult.items.length} من أصل ${productsResult.total} منتج مطابق (إجمالي الكتالوج: ${products.length})`
+                          : `Showing ${productsResult.items.length} of ${productsResult.total} matching products (Total catalog: ${products.length})`}
                       </p>
                     </div>
                     <button
                       type="button"
+                      data-testid="admin-new-product-button"
                       onClick={() => openProductEditor()}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8E4DEB] text-white text-xs font-bold shrink-0"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold shrink-0 cursor-pointer"
                     >
                       <Plus className="w-4 h-4" />
                       <span>
@@ -1087,16 +877,302 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
+                  {/* Comprehensive Filter, Search & Sort Bar */}
+                  <div
+                    data-testid="admin-products-filter-bar"
+                    className="p-4 rounded-xl bg-[#F4F3F7] border border-slate-200/80 space-y-3"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                      {/* Search input */}
+                      <div className="md:col-span-5 relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          data-testid="admin-products-search-input"
+                          value={productsQuery.q}
+                          onChange={(e) =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              q: e.target.value,
+                              page: 1,
+                            }))
+                          }
+                          placeholder={
+                            isAr
+                              ? 'ابحث بالاسم (عربي/EN)، كود SKU، المعالج، أو المواصفات...'
+                              : 'Search title (AR/EN), SKU, processor, specs...'
+                          }
+                          className="w-full ps-9 pe-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 focus:border-[#8E4DEB] focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Category Filter */}
+                      <div className="md:col-span-3">
+                        <select
+                          data-testid="admin-products-category-filter"
+                          value={productsQuery.categoryId}
+                          onChange={(e) =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              categoryId: e.target.value,
+                              subcategoryId: 'ALL',
+                              page: 1,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800"
+                        >
+                          <option value="ALL">
+                            {isAr ? 'كل الأقسام الرئيسية' : 'All Root Categories'}
+                          </option>
+                          {rootCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name[lang]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Subcategory Filter */}
+                      <div className="md:col-span-2">
+                        <select
+                          data-testid="admin-products-subcategory-filter"
+                          value={productsQuery.subcategoryId}
+                          onChange={(e) =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              subcategoryId: e.target.value,
+                              page: 1,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800"
+                        >
+                          <option value="ALL">
+                            {isAr ? 'كل الأقسام الفرعية' : 'All Subcategories'}
+                          </option>
+                          {selectedFilterSubcategories.map((sub) => (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.name[lang]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Brand Filter */}
+                      <div className="md:col-span-2">
+                        <select
+                          data-testid="admin-products-brand-filter"
+                          value={productsQuery.brandId}
+                          onChange={(e) =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              brandId: e.target.value,
+                              page: 1,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800"
+                        >
+                          <option value="ALL">
+                            {isAr ? 'كل العلامات' : 'All Brands'}
+                          </option>
+                          {brands.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Second Row: Condition, Availability, Use-Case, Merchandising Flags, Sort & Reset */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+                      <select
+                        data-testid="admin-products-condition-filter"
+                        value={productsQuery.condition}
+                        onChange={(e) =>
+                          setProductsQuery((prev) => ({
+                            ...prev,
+                            condition: e.target.value as ProductCondition | 'ALL',
+                            page: 1,
+                          }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700"
+                      >
+                        <option value="ALL">
+                          {isAr ? 'الحالة: الكل (NEW/USED)' : 'Condition: All'}
+                        </option>
+                        <option value="NEW">NEW ({isAr ? 'جديد' : 'New'})</option>
+                        <option value="USED">USED ({isAr ? 'مستعمل' : 'Used'})</option>
+                      </select>
+
+                      <select
+                        data-testid="admin-products-availability-filter"
+                        value={productsQuery.availability}
+                        onChange={(e) =>
+                          setProductsQuery((prev) => ({
+                            ...prev,
+                            availability: e.target.value as AvailabilityStatus | 'ALL',
+                            page: 1,
+                          }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700"
+                      >
+                        <option value="ALL">
+                          {isAr ? 'التوفر: الكل' : 'Availability: All'}
+                        </option>
+                        <option value="IN_STOCK">
+                          {isAr ? 'متوفر (In Stock)' : 'In Stock'}
+                        </option>
+                        <option value="ON_REQUEST">
+                          {isAr ? 'حسب الطلب (On Request)' : 'On Request'}
+                        </option>
+                        <option value="OUT_OF_STOCK">
+                          {isAr ? 'غير متوفر (Out of Stock)' : 'Out of Stock'}
+                        </option>
+                      </select>
+
+                      <select
+                        data-testid="admin-products-usecase-filter"
+                        value={productsQuery.useCaseId}
+                        onChange={(e) =>
+                          setProductsQuery((prev) => ({
+                            ...prev,
+                            useCaseId: e.target.value,
+                            page: 1,
+                          }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700"
+                      >
+                        <option value="ALL">
+                          {isAr ? 'وسم الاستخدام: الكل' : 'Use Case: All'}
+                        </option>
+                        {useCaseTags.map((uc) => (
+                          <option key={uc.id} value={uc.id}>
+                            {uc.name[lang]}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        data-testid="admin-products-flag-filter"
+                        value={
+                          productsQuery.bestSeller === 'true'
+                            ? 'BEST_SELLER'
+                            : productsQuery.newArrival === 'true'
+                            ? 'NEW_ARRIVAL'
+                            : productsQuery.hasOffer === 'true'
+                            ? 'HAS_OFFER'
+                            : 'ALL'
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProductsQuery((prev) => ({
+                            ...prev,
+                            bestSeller: v === 'BEST_SELLER' ? 'true' : 'ALL',
+                            newArrival: v === 'NEW_ARRIVAL' ? 'true' : 'ALL',
+                            hasOffer: v === 'HAS_OFFER' ? 'true' : 'ALL',
+                            page: 1,
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700"
+                      >
+                        <option value="ALL">
+                          {isAr ? 'الشارات التسويقية: الكل' : 'Badges: All'}
+                        </option>
+                        <option value="BEST_SELLER">
+                          {isAr ? 'الأكثر مبيعاً ★' : 'Best Sellers ★'}
+                        </option>
+                        <option value="NEW_ARRIVAL">
+                          {isAr ? 'وصل حديثاً' : 'New Arrivals'}
+                        </option>
+                        <option value="HAS_OFFER">
+                          {isAr ? 'عليه عرض نشط' : 'Has Active Offer'}
+                        </option>
+                      </select>
+
+                      <select
+                        data-testid="admin-products-sort-select"
+                        value={`${productsQuery.sort}:${productsQuery.order}`}
+                        onChange={(e) => {
+                          const [sort, order] = e.target.value.split(':') as [
+                            AdminProductsQuery['sort'],
+                            AdminProductsQuery['order'],
+                          ];
+                          setProductsQuery((prev) => ({
+                            ...prev,
+                            sort,
+                            order,
+                            page: 1,
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700"
+                      >
+                        <option value="updatedAt:desc">
+                          {isAr ? 'ترتيب: الأحدث تعديلاً' : 'Sort: Recently Updated'}
+                        </option>
+                        <option value="priceUsd:asc">
+                          {isAr ? 'السعر: من الأقل للأعلى' : 'Price: Low to High'}
+                        </option>
+                        <option value="priceUsd:desc">
+                          {isAr ? 'السعر: من الأعلى للأقل' : 'Price: High to Low'}
+                        </option>
+                        <option value="name:asc">
+                          {isAr ? 'الاسم: أ - ي' : 'Name: A to Z'}
+                        </option>
+                        <option value="sku:asc">
+                          {isAr ? 'كود SKU' : 'SKU Code'}
+                        </option>
+                      </select>
+
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          aria-label="Items per page"
+                          value={productsQuery.limit}
+                          onChange={(e) =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              limit: Number(e.target.value) || 10,
+                              page: 1,
+                            }))
+                          }
+                          className="flex-1 px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-mono-num font-bold text-slate-700"
+                        >
+                          <option value={8}>8 / page</option>
+                          <option value={10}>10 / page</option>
+                          <option value={20}>20 / page</option>
+                          <option value={50}>50 / page</option>
+                        </select>
+
+                        {hasActiveProductFilters && (
+                          <button
+                            type="button"
+                            data-testid="admin-products-reset-filters"
+                            onClick={() =>
+                              setProductsQuery(DEFAULT_ADMIN_PRODUCTS_QUERY)
+                            }
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                            title={isAr ? 'إعادة ضبط الفلاتر' : 'Reset Filters'}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>{isAr ? 'مسح' : 'Clear'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Desktop & Tablet Table View (>= 768px) */}
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-500">
                           <th className="py-2.5 px-2 text-start">
-                            {lang === 'ar' ? 'المنتج' : 'Product'}
+                            {lang === 'ar' ? 'المنتج والمعرض' : 'Product & Gallery'}
                           </th>
                           <th className="py-2.5 px-2 text-start">
-                            {lang === 'ar' ? 'الحالة' : 'Condition'}
+                            {lang === 'ar' ? 'القسم / العلامة' : 'Category / Brand'}
+                          </th>
+                          <th className="py-2.5 px-2 text-start">
+                            {lang === 'ar' ? 'الحالة والتوفر' : 'Condition & Stock'}
                           </th>
                           <th className="py-2.5 px-2 text-start">
                             {lang === 'ar' ? 'السعر (USD / SYP)' : 'USD / SYP'}
@@ -1110,125 +1186,179 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {products.map((prod) => (
-                          <tr key={prod.id} className="hover:bg-slate-50/80">
-                            <td className="py-2.5 px-2">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-12 h-9 rounded border border-slate-200 overflow-hidden shrink-0">
-                                  <ProductVisual
-                                    visualKey={prod.primaryImage}
-                                    alt={prod.name[lang]}
-                                  />
-                                </div>
-                                <div>
-                                  <div className="font-bold text-[#111318] line-clamp-1 max-w-xs">
-                                    {prod.name[lang]}
+                        {productsResult.items.map((prod) => {
+                          const cat = categories.find((c) => c.id === prod.categoryId);
+                          const brand = brands.find((b) => b.id === prod.brandId);
+                          const galleryCount = prod.galleryImages?.length || 1;
+                          return (
+                            <tr key={prod.id} className="hover:bg-slate-50/80">
+                              <td className="py-2.5 px-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-12 h-9 rounded border border-slate-200 overflow-hidden shrink-0 relative">
+                                    <ProductVisual
+                                      visualKey={prod.primaryImage}
+                                      alt={prod.name[lang]}
+                                    />
                                   </div>
-                                  <div
-                                    className="font-mono-num text-[11px] text-slate-400"
-                                    dir="ltr"
+                                  <div>
+                                    <div className="font-bold text-[#111318] line-clamp-1 max-w-xs">
+                                      {prod.name[lang]}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span
+                                        className="font-mono-num text-[11px] text-slate-400"
+                                        dir="ltr"
+                                      >
+                                        {prod.sku}
+                                      </span>
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                        <Images className="w-3 h-3 text-[#8E4DEB]" />
+                                        {galleryCount}/5
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-2">
+                                <div className="font-semibold text-slate-800">
+                                  {cat?.name[lang] ?? prod.categoryId}
+                                </div>
+                                <div className="text-[11px] text-slate-500" dir="ltr">
+                                  {brand?.name ?? prod.brandId}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                                      prod.condition === 'USED'
+                                        ? 'bg-amber-50 text-[#D96B38] border border-amber-200'
+                                        : 'bg-slate-100 text-[#111318]'
+                                    }`}
                                   >
-                                    {prod.sku}
-                                  </div>
+                                    {prod.condition}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-semibold ${
+                                      prod.availability === 'IN_STOCK'
+                                        ? 'text-emerald-700'
+                                        : prod.availability === 'ON_REQUEST'
+                                        ? 'text-amber-700'
+                                        : 'text-rose-600'
+                                    }`}
+                                  >
+                                    {prod.availability === 'IN_STOCK'
+                                      ? isAr
+                                        ? 'متوفر'
+                                        : 'In Stock'
+                                      : prod.availability === 'ON_REQUEST'
+                                      ? isAr
+                                        ? 'حسب الطلب'
+                                        : 'On Request'
+                                      : isAr
+                                      ? 'نفذت الكمية'
+                                      : 'Out of Stock'}
+                                  </span>
                                 </div>
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-2 font-bold">
-                              <span
-                                className={
-                                  prod.condition === 'USED'
-                                    ? 'text-[#D96B38]'
-                                    : 'text-[#111318]'
-                                }
-                              >
-                                {prod.condition}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-2 font-mono-num">
-                              <div className="font-bold text-[#111318]" dir="ltr">
-                                {formatUsd(prod.priceUsd)}
-                              </div>
-                              <div className="text-[11px] text-slate-500">
-                                {formatSyp(
-                                  convertUsdToSyp(
-                                    prod.priceUsd,
-                                    settings.usdToSypRate
-                                  ),
-                                  lang
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => onToggleBestSeller(prod.id)}
-                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
-                                  prod.isBestSeller
-                                    ? 'bg-[#8E4DEB] text-white'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                {prod.isBestSeller
-                                  ? lang === 'ar'
-                                    ? 'مفعّل ★'
-                                    : 'Active ★'
-                                  : lang === 'ar'
-                                  ? 'غير مفعّل'
-                                  : 'Off'}
-                              </button>
-                            </td>
-                            <td className="py-2.5 px-2 text-end">
-                              <div className="inline-flex items-center gap-1.5">
+                              </td>
+                              <td className="py-2.5 px-2 font-mono-num">
+                                <div className="font-bold text-[#111318]" dir="ltr">
+                                  {formatUsd(prod.priceUsd)}
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  {formatSyp(
+                                    convertUsdToSyp(
+                                      prod.priceUsd,
+                                      settings.usdToSypRate
+                                    ),
+                                    lang
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-2 text-center">
                                 <button
                                   type="button"
-                                  onClick={() => openProductEditor(prod)}
-                                  className="p-1.5 rounded bg-[#F4F3F7] hover:bg-[#8E4DEB] hover:text-white text-slate-700 transition-colors"
-                                  aria-label={`Edit ${prod.name.en}`}
+                                  onClick={() => onToggleBestSeller(prod.id)}
+                                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                                    prod.isBestSeller
+                                      ? 'bg-[#8E4DEB] text-white'
+                                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  }`}
                                 >
-                                  <Edit3 className="w-3.5 h-3.5" />
+                                  {prod.isBestSeller
+                                    ? lang === 'ar'
+                                      ? 'مفعّل ★'
+                                      : 'Active ★'
+                                    : lang === 'ar'
+                                    ? 'غير مفعّل'
+                                    : 'Off'}
                                 </button>
-                                {confirmDeleteProductId === prod.id ? (
-                                  <div className="inline-flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onDeleteProduct(prod.id);
-                                        setConfirmDeleteProductId(null);
-                                        showToast(
-                                          'تم حذف المنتج بنجاح',
-                                          'Product deleted'
-                                        );
-                                      }}
-                                      className="px-2 py-1 rounded bg-rose-600 text-white text-[10px] font-bold"
-                                    >
-                                      {lang === 'ar' ? 'تأكيد' : 'Confirm'}
-                                    </button>
+                              </td>
+                              <td className="py-2.5 px-2 text-end">
+                                <div className="inline-flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openProductEditor(prod)}
+                                    className="p-1.5 rounded bg-[#F4F3F7] hover:bg-[#8E4DEB] hover:text-white text-slate-700 transition-colors cursor-pointer"
+                                    aria-label={`Edit ${prod.name.en}`}
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {confirmDeleteProductId === prod.id ? (
+                                    <div className="inline-flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onDeleteProduct(prod.id);
+                                          setConfirmDeleteProductId(null);
+                                          showToast(
+                                            'تم حذف المنتج بنجاح',
+                                            'Product deleted'
+                                          );
+                                        }}
+                                        className="px-2 py-1 rounded bg-rose-600 text-white text-[10px] font-bold cursor-pointer"
+                                      >
+                                        {lang === 'ar' ? 'تأكيد' : 'Confirm'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfirmDeleteProductId(null)
+                                        }
+                                        className="px-1.5 py-1 rounded bg-slate-100 text-slate-600 text-[10px] font-bold cursor-pointer"
+                                      >
+                                        {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                      </button>
+                                    </div>
+                                  ) : (
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        setConfirmDeleteProductId(null)
+                                        setConfirmDeleteProductId(prod.id)
                                       }
-                                      className="px-1.5 py-1 rounded bg-slate-100 text-slate-600 text-[10px] font-bold"
+                                      className="p-1.5 rounded bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 transition-colors cursor-pointer"
+                                      aria-label={`Delete ${prod.name.en}`}
                                     >
-                                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setConfirmDeleteProductId(prod.id)
-                                    }
-                                    className="p-1.5 rounded bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 transition-colors"
-                                    aria-label={`Delete ${prod.name.en}`}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {productsResult.items.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              className="py-10 text-center text-slate-400 text-xs font-bold"
+                            >
+                              {isAr
+                                ? 'لا توجد منتجات مطابقة لمعايير البحث أو التصفية الحالية.'
+                                : 'No products match the current search or filter criteria.'}
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1238,7 +1368,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     data-testid="admin-mobile-products-list"
                     className="md:hidden space-y-2.5"
                   >
-                    {products.map((prod) => (
+                    {productsResult.items.map((prod) => (
                       <div
                         key={prod.id}
                         data-testid={`admin-mobile-product-card-${prod.id}`}
@@ -1369,197 +1499,495 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     ))}
                   </div>
+
+                  {/* Pagination Footer */}
+                  {productsResult.totalPages > 1 && (
+                    <div
+                      data-testid="admin-products-pagination"
+                      className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="text-xs text-slate-500 font-semibold">
+                        {isAr
+                          ? `صفحة ${productsResult.page} من ${productsResult.totalPages} (${productsResult.total} منتج)`
+                          : `Page ${productsResult.page} of ${productsResult.totalPages} (${productsResult.total} products)`}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={productsResult.page <= 1}
+                          onClick={() =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              page: Math.max(1, prev.page - 1),
+                            }))
+                          }
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {isAr ? (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          )}
+                          <span>{isAr ? 'السابق' : 'Prev'}</span>
+                        </button>
+                        {Array.from(
+                          { length: productsResult.totalPages },
+                          (_, idx) => idx + 1
+                        ).map((pNum) => (
+                          <button
+                            key={pNum}
+                            type="button"
+                            onClick={() =>
+                              setProductsQuery((prev) => ({
+                                ...prev,
+                                page: pNum,
+                              }))
+                            }
+                            className={`w-8 h-8 rounded-lg text-xs font-mono-num font-bold transition-colors cursor-pointer ${
+                              pNum === productsResult.page
+                                ? 'bg-[#111318] text-white'
+                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pNum}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          disabled={
+                            productsResult.page >= productsResult.totalPages
+                          }
+                          onClick={() =>
+                            setProductsQuery((prev) => ({
+                              ...prev,
+                              page: Math.min(
+                                productsResult.totalPages,
+                                prev.page + 1
+                              ),
+                            }))
+                          }
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{isAr ? 'التالي' : 'Next'}</span>
+                          {isAr ? (
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 3: OFFERS MANAGEMENT WITH DATE/TIME & COUNTDOWN PREVIEW */}
+          {/* TAB 2.5: HOMEPAGE HERO SLIDES & PROMOTIONAL BANNERS */}
+          {activeTab === 'banners' && (
+            <AdminBannersManager
+              heroSlides={heroSlides}
+              promoBanners={promoBanners}
+              categories={categories}
+              lang={lang}
+              onNotify={showToast}
+              onSaveHeroSlide={(s) => {
+                onSaveHeroSlide(s);
+                showToast(
+                  'تم حفظ شريحة السلايدر الرئيسي بنجاح',
+                  'Hero slide saved successfully'
+                );
+              }}
+              onReorderHeroSlides={(slides) => {
+                onReorderHeroSlides(slides);
+                showToast(
+                  'تم تحديث ترتيب السلايدر الرئيسي',
+                  'Hero slide order updated'
+                );
+              }}
+              onDeleteHeroSlide={(id) => {
+                onDeleteHeroSlide(id);
+                showToast('تم حذف الشريحة', 'Hero slide deleted');
+              }}
+              onSavePromoBanner={(b) => {
+                onSavePromoBanner(b);
+                showToast(
+                  'تم حفظ البانر الترويجي بنجاح',
+                  'Promotional banner saved'
+                );
+              }}
+              onReorderPromoBanners={(banners) => {
+                onReorderPromoBanners(banners);
+                showToast(
+                  'تم تحديث ترتيب البانرات الترويجية',
+                  'Promo banners reordered'
+                );
+              }}
+            />
+          )}
+
+          {/* TAB 3: OFFERS MANAGEMENT WITH FULL CREATE/EDIT, DATE/TIME & FILTERING */}
           {activeTab === 'offers' && (
             <div className="space-y-6">
-              {/* Create Time-Limited Offer Form */}
+              {/* Create / Edit Time-Limited Offer Form */}
               <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-                <h2 className="text-base font-extrabold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'إنشاء عرض مؤقت جديد (Time-Limited Offer)'
-                    : 'Create Time-Limited Offer'}
-                </h2>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-extrabold text-[#111318]">
+                      {editingOfferId
+                        ? isAr
+                          ? 'تعديل العرض المؤقت (Edit Time-Limited Offer)'
+                          : 'Edit Time-Limited Offer'
+                        : isAr
+                        ? 'إنشاء عرض مؤقت جديد (Create Time-Limited Offer)'
+                        : 'Create Time-Limited Offer'}
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {isAr
+                        ? 'حدد المنتج، سعر العرض بالدولار، تاريخ البداية والنهاية، والشارة التسويقية'
+                        : 'Configure product, discounted USD price, start/end timestamps, and bilingual promotional badges'}
+                    </p>
+                  </div>
+                  {editingOfferId && (
+                    <button
+                      type="button"
+                      onClick={resetOfferForm}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700"
+                    >
+                      {isAr ? 'إلغاء التعديل' : 'Cancel Edit'}
+                    </button>
+                  )}
+                </div>
+
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const created: Offer = {
-                      id: `offer-${Date.now()}`,
-                      productId: newOfferProductId,
-                      title: { ar: newOfferTitleAr, en: newOfferTitleEn },
+                    const saved: Offer = {
+                      id: editingOfferId ?? `offer-${Date.now()}`,
+                      productId: offerProductId,
+                      title: { ar: offerTitleAr, en: offerTitleEn },
                       badgeText: {
-                        ar: newOfferExclusive ? 'عرض حصري' : 'عرض مؤقت',
-                        en: newOfferExclusive ? 'Exclusive Deal' : 'Limited Deal',
+                        ar:
+                          offerBadgeAr.trim() ||
+                          (offerExclusive ? 'عرض حصري' : 'عرض مؤقت'),
+                        en:
+                          offerBadgeEn.trim() ||
+                          (offerExclusive ? 'Exclusive Deal' : 'Limited Deal'),
                       },
-                      offerPriceUsd: newOfferPriceUsd,
-                      startTime: new Date(nowMs - 60000).toISOString(),
-                      endTime: new Date(
-                        nowMs + newOfferDurationHours * 3600 * 1000
-                      ).toISOString(),
-                      isExclusive: newOfferExclusive,
+                      offerPriceUsd,
+                      startTime: new Date(offerStartIso).toISOString(),
+                      endTime: new Date(offerEndIso).toISOString(),
+                      isExclusive: offerExclusive,
+                      isActive: true,
                     };
-                    onSaveOffer(created);
+                    onSaveOffer(saved);
+                    resetOfferForm();
                     showToast(
-                      'تم تفعيل العرض المؤقت بنجاح',
-                      'Timed offer published'
+                      editingOfferId
+                        ? 'تم تحديث العرض المؤقت بنجاح'
+                        : 'تم تفعيل العرض المؤقت بنجاح',
+                      editingOfferId
+                        ? 'Timed offer updated'
+                        : 'Timed offer published'
                     );
                   }}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
+                  className="space-y-4"
                 >
-                  <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar' ? 'اختر المنتج' : 'Select Product'}
-                    </label>
-                    <select
-                      value={newOfferProductId}
-                      onChange={(e) => {
-                        const p = products.find(
-                          (item) => item.id === e.target.value
-                        );
-                        setNewOfferProductId(e.target.value);
-                        if (p) {
-                          setNewOfferPriceUsd(Math.round(p.priceUsd * 0.88));
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {lang === 'ar' ? 'اختر المنتج *' : 'Select Product *'}
+                      </label>
+                      <select
+                        value={offerProductId}
+                        onChange={(e) => {
+                          const p = products.find(
+                            (item) => item.id === e.target.value
+                          );
+                          setOfferProductId(e.target.value);
+                          if (p && !editingOfferId) {
+                            setOfferPriceUsd(Math.round(p.priceUsd * 0.88));
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white font-semibold"
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name[lang]} — {formatUsd(p.priceUsd)} ({p.sku})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {lang === 'ar'
+                          ? 'سعر العرض المخفض (USD $)'
+                          : 'Offer Price (USD $)'}
+                      </label>
+                      <input
+                        type="number"
+                        dir="ltr"
+                        min={1}
+                        value={offerPriceUsd}
+                        onChange={(e) =>
+                          setOfferPriceUsd(Number(e.target.value) || 1)
                         }
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                    >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name[lang]} ({formatUsd(p.priceUsd)})
-                        </option>
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">
+                        {isAr ? 'معاينة الخصم والليرة' : 'Discount & SYP Preview'}
+                      </label>
+                      <div className="px-3 py-2 rounded-lg bg-[#F4F3F7] border border-slate-200 text-xs font-mono-num flex items-center justify-between">
+                        <span className="font-bold text-[#8E4DEB]">
+                          {formatSyp(
+                            convertUsdToSyp(offerPriceUsd, settings.usdToSypRate),
+                            lang
+                          )}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold text-[10px]">
+                          -{previewDiscountPct}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Titles & Badges */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {lang === 'ar' ? 'عنوان العرض (عربي)' : 'Offer Title (AR)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={offerTitleAr}
+                        onChange={(e) => setOfferTitleAr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {lang === 'ar' ? 'عنوان العرض (EN)' : 'Offer Title (EN)'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={offerTitleEn}
+                        onChange={(e) => setOfferTitleEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {isAr ? 'نص الشارة (عربي)' : 'Badge Text (AR)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={offerBadgeAr}
+                        onChange={(e) => setOfferBadgeAr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {isAr ? 'نص الشارة (EN)' : 'Badge Text (EN)'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={offerBadgeEn}
+                        onChange={(e) => setOfferBadgeEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Start / End Date-Time & Quick Presets */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-2 border-t border-slate-100">
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {isAr ? 'تاريخ ووقت البدء' : 'Start Date & Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        dir="ltr"
+                        value={offerStartIso}
+                        onChange={(e) => setOfferStartIso(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111318] mb-1">
+                        {isAr ? 'تاريخ ووقت الانتهاء' : 'End Date & Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        dir="ltr"
+                        value={offerEndIso}
+                        onChange={(e) => setOfferEndIso(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[24, 48, 72, 168].map((hrs) => (
+                        <button
+                          key={hrs}
+                          type="button"
+                          onClick={() => {
+                            setOfferStartIso(
+                              new Date(nowMs - 60000).toISOString().slice(0, 16)
+                            );
+                            setOfferEndIso(
+                              new Date(nowMs + hrs * 3600 * 1000)
+                                .toISOString()
+                                .slice(0, 16)
+                            );
+                          }}
+                          className="px-2.5 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-mono-num font-bold cursor-pointer"
+                        >
+                          +{hrs}h
+                        </button>
                       ))}
-                    </select>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'سعر العرض المخفض (USD $)'
-                        : 'Discounted Offer Price (USD $)'}
-                    </label>
-                    <input
-                      type="number"
-                      dir="ltr"
-                      min={1}
-                      value={newOfferPriceUsd}
-                      onChange={(e) =>
-                        setNewOfferPriceUsd(Number(e.target.value) || 1)
-                      }
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'مدة العرض (بالساعات)'
-                        : 'Active Duration (Hours)'}
-                    </label>
-                    <input
-                      type="number"
-                      dir="ltr"
-                      min={1}
-                      max={720}
-                      value={newOfferDurationHours}
-                      onChange={(e) =>
-                        setNewOfferDurationHours(Number(e.target.value) || 24)
-                      }
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono-num"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar' ? 'عنوان العرض (عربي)' : 'Offer Title (AR)'}
-                    </label>
-                    <input
-                      type="text"
-                      value={newOfferTitleAr}
-                      onChange={(e) => setNewOfferTitleAr(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar' ? 'عنوان العرض (إنكليزي)' : 'Offer Title (EN)'}
-                    </label>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      value={newOfferTitleEn}
-                      onChange={(e) => setNewOfferTitleEn(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="flex items-center gap-2 text-xs font-bold text-[#111318]">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <label className="flex items-center gap-2 text-xs font-bold text-[#111318] cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={newOfferExclusive}
-                        onChange={(e) =>
-                          setNewOfferExclusive(e.target.checked)
-                        }
+                        checked={offerExclusive}
+                        onChange={(e) => setOfferExclusive(e.target.checked)}
                         className="rounded text-[#D66C9D]"
                       />
                       <span>
-                        {lang === 'ar' ? 'عرض حصري (Exclusive)' : 'Exclusive'}
+                        {lang === 'ar'
+                          ? 'عرض حصري يظهر في صفحة العروض الحصرية والواجهة الرئيسية'
+                          : 'Exclusive Offer (Featured on Homepage & Exclusive Offers Page)'}
                       </span>
                     </label>
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-lg bg-[#D66C9D] hover:opacity-95 text-white text-xs font-bold"
+                      className="px-5 py-2 rounded-lg bg-[#D66C9D] hover:opacity-95 text-white text-xs font-bold cursor-pointer"
                     >
-                      {lang === 'ar' ? 'نشر العرض' : 'Publish Offer'}
+                      {editingOfferId
+                        ? isAr
+                          ? 'حفظ تعديلات العرض'
+                          : 'Update Offer'
+                        : isAr
+                        ? 'نشر العرض المؤقت'
+                        : 'Publish Offer'}
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Active Offers List with Live Countdown Preview */}
+              {/* Configured Offers List with Search, Status Filter & Countdown Preview */}
               <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-                <h2 className="text-sm font-bold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'العروض المسجلة ومعاينة المؤقت التنازلي'
-                    : 'Configured Offers & Live Countdown Preview'}
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h2 className="text-sm font-bold text-[#111318]">
+                    {lang === 'ar'
+                      ? `العروض المسجلة ومعاينة المؤقت التنازلي (${offersResult.total})`
+                      : `Configured Offers & Live Countdown Preview (${offersResult.total})`}
+                  </h2>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={offersQuery.q}
+                      onChange={(e) =>
+                        setOffersQuery((prev) => ({
+                          ...prev,
+                          q: e.target.value,
+                          page: 1,
+                        }))
+                      }
+                      placeholder={
+                        isAr ? 'بحث في العروض...' : 'Search offers...'
+                      }
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs"
+                    />
+                    <select
+                      value={offersQuery.status}
+                      onChange={(e) =>
+                        setOffersQuery((prev) => ({
+                          ...prev,
+                          status: e.target.value as OfferTemporalStatus | 'ALL',
+                          page: 1,
+                        }))
+                      }
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white"
+                    >
+                      <option value="ALL">
+                        {isAr ? 'كل الحالات' : 'All Statuses'}
+                      </option>
+                      <option value="ACTIVE">
+                        {isAr ? 'نشط حالياً (Active)' : 'Active'}
+                      </option>
+                      <option value="SCHEDULED">
+                        {isAr ? 'مجدول (Scheduled)' : 'Scheduled'}
+                      </option>
+                      <option value="EXPIRED">
+                        {isAr ? 'منتهي (Expired)' : 'Expired'}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="space-y-3">
-                  {offers.map((offer) => {
+                  {offersResult.items.map((offer) => {
                     const prod = products.find((p) => p.id === offer.productId);
-                    const active = isOfferActive(offer, nowMs);
+                    const temporalStatus = getOfferTemporalStatus(offer, nowMs);
+                    const discPct = prod
+                      ? calculateDiscountPercent(
+                          prod.priceUsd,
+                          offer.offerPriceUsd
+                        )
+                      : 0;
                     return (
                       <div
                         key={offer.id}
                         className="p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                       >
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span
                               className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                                active
+                                temporalStatus === 'ACTIVE'
                                   ? 'bg-emerald-50 text-emerald-700'
+                                  : temporalStatus === 'SCHEDULED'
+                                  ? 'bg-blue-50 text-blue-700'
                                   : 'bg-slate-100 text-slate-500'
                               }`}
                             >
-                              {active
+                              {temporalStatus === 'ACTIVE'
                                 ? lang === 'ar'
                                   ? 'نشط حالياً'
                                   : 'ACTIVE'
+                                : temporalStatus === 'SCHEDULED'
+                                ? lang === 'ar'
+                                  ? 'مجدول'
+                                  : 'SCHEDULED'
                                 : lang === 'ar'
                                 ? 'منتهي الصلاحية'
                                 : 'EXPIRED'}
+                            </span>
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-mono-num">
+                              -{discPct}%
                             </span>
                             <span className="text-xs font-bold text-[#111318]">
                               {prod?.name[lang]}
                             </span>
                           </div>
                           <div className="text-xs text-slate-500">
-                            {offer.title[lang]} —{' '}
+                            {offer.title[lang]} ({offer.badgeText[lang]}) —{' '}
                             <span className="font-mono-num font-bold text-[#111318]">
                               {formatUsd(offer.offerPriceUsd)}
                             </span>{' '}
@@ -1569,7 +1997,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5">
                           <CountdownBadge
                             endTimeIso={offer.endTime}
                             nowMs={nowMs}
@@ -1578,8 +2006,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           />
                           <button
                             type="button"
+                            onClick={() => startEditOffer(offer)}
+                            className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-[#8E4DEB] hover:text-white transition-colors cursor-pointer"
+                            title={isAr ? 'تعديل العرض' : 'Edit Offer'}
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => onDeleteOffer(offer.id)}
-                            className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors"
+                            className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer"
                             aria-label="Delete Offer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1596,425 +2032,316 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* TAB 4: CUSTOMER PRODUCT REQUESTS */}
           {activeTab === 'requests' && (
             <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-              <div>
-                <h1 className="text-base font-extrabold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'طلبات الزبائن للمنتجات (Customer Product Requests)'
-                    : 'Customer Product Requests'}
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {lang === 'ar'
-                    ? 'جميع الطلبات المرسلة من نافذة "اطلب الآن" في المتجر للمتابعة المباشرة عبر واتساب'
-                    : 'All inquiries submitted via the storefront Request Now modal for direct WhatsApp follow-up'}
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-base font-extrabold text-[#111318]">
+                    {lang === 'ar'
+                      ? 'طلبات الزبائن للمنتجات (Customer Product Requests)'
+                      : 'Customer Product Requests'}
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === 'ar'
+                      ? 'جميع الطلبات المرسلة من نافذة "اطلب الآن" في المتجر للمتابعة المباشرة عبر واتساب'
+                      : 'All inquiries submitted via the storefront Request Now modal for direct WhatsApp follow-up'}
+                  </p>
+                </div>
+
+                {/* Search & Status Filter */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute start-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={requestsQuery.q}
+                      onChange={(e) =>
+                        setRequestsQuery((prev) => ({
+                          ...prev,
+                          q: e.target.value,
+                          page: 1,
+                        }))
+                      }
+                      placeholder={
+                        isAr
+                          ? 'بحث باسم الزبون، الهاتف، المنتج...'
+                          : 'Search name, phone, SKU...'
+                      }
+                      className="ps-8 pe-3 py-1.5 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                  <select
+                    value={requestsQuery.status}
+                    onChange={(e) =>
+                      setRequestsQuery((prev) => ({
+                        ...prev,
+                        status: e.target.value as
+                          | CustomerRequest['status']
+                          | 'ALL',
+                        page: 1,
+                      }))
+                    }
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                  >
+                    <option value="ALL">
+                      {isAr ? 'كل الحالات' : 'All Statuses'}
+                    </option>
+                    <option value="NEW">NEW ({isAr ? 'جديد' : 'New'})</option>
+                    <option value="CONTACTED">
+                      CONTACTED ({isAr ? 'تم التواصل' : 'Contacted'})
+                    </option>
+                    <option value="COMPLETED">
+                      COMPLETED ({isAr ? 'مكتمل' : 'Completed'})
+                    </option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-3">
-                {customerRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center flex-wrap gap-2">
-                        <span className="text-sm font-extrabold text-[#111318]">
-                          {req.customerName}
-                        </span>
-                        <span
-                          className="font-mono-num text-xs font-bold text-[#8E4DEB]"
-                          dir="ltr"
+                {requestsResult.items.map((req) => {
+                  const phoneVerified = isPhoneLinkVerified(req.phoneNumber);
+                  const isEditingNote = editingRequestNoteId === req.id;
+
+                  return (
+                    <div
+                      key={req.id}
+                      className="p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-sm font-extrabold text-[#111318]">
+                            {req.customerName}
+                          </span>
+                          <span
+                            className="font-mono-num text-xs font-bold text-[#8E4DEB]"
+                            dir="ltr"
+                          >
+                            {req.phoneNumber}
+                          </span>
+                          {!phoneVerified && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                              {isAr
+                                ? 'رقم تجريبي غير موثق'
+                                : 'Unverified Demo Phone'}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-400 font-mono-num">
+                            {new Date(req.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <div className="text-xs font-semibold text-slate-800">
+                          {req.productName[lang]}{' '}
+                          <span className="font-mono-num text-slate-500">
+                            ({req.productSku})
+                          </span>{' '}
+                          —{' '}
+                          <span className="font-mono-num font-bold text-[#111318]">
+                            {formatUsd(req.priceUsdAtRequest)}
+                          </span>{' '}
+                          ({formatSyp(req.priceSypAtRequest, lang)})
+                        </div>
+
+                        {req.note && (
+                          <p className="text-xs text-slate-600 bg-[#F4F3F7] p-2 rounded mt-1">
+                            {lang === 'ar'
+                              ? 'ملاحظة الزبون: '
+                              : 'Customer Note: '}
+                            {req.note}
+                          </p>
+                        )}
+
+                        {req.adminNote && !isEditingNote && (
+                          <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 p-2 rounded mt-1">
+                            <span className="font-bold">
+                              {isAr ? 'ملاحظة الإدارة: ' : 'Admin Note: '}
+                            </span>
+                            {req.adminNote}
+                          </p>
+                        )}
+
+                        {isEditingNote ? (
+                          <div className="flex items-center gap-2 pt-2">
+                            <input
+                              type="text"
+                              value={requestAdminNoteDraft}
+                              onChange={(e) =>
+                                setRequestAdminNoteDraft(e.target.value)
+                              }
+                              placeholder={
+                                isAr
+                                  ? 'أضف ملاحظة متابعة داخلية...'
+                                  : 'Add internal follow-up note...'
+                              }
+                              className="flex-1 px-3 py-1.5 rounded border border-slate-300 text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateRequestStatus(
+                                  req.id,
+                                  req.status,
+                                  requestAdminNoteDraft
+                                );
+                                setEditingRequestNoteId(null);
+                                showToast(
+                                  'تم حفظ الملاحظة الإدارية',
+                                  'Admin note saved'
+                                );
+                              }}
+                              className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold"
+                            >
+                              {isAr ? 'حفظ' : 'Save'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingRequestNoteId(req.id);
+                              setRequestAdminNoteDraft(req.adminNote || '');
+                            }}
+                            className="text-[11px] font-bold text-slate-500 hover:text-[#8E4DEB] pt-1 inline-block"
+                          >
+                            {req.adminNote
+                              ? isAr
+                                ? 'تعديل ملاحظة الإدارة'
+                                : 'Edit Admin Note'
+                              : isAr
+                              ? '+ إضافة ملاحظة متابعة'
+                              : '+ Add Follow-up Note'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center flex-wrap gap-2 shrink-0">
+                        <select
+                          value={req.status}
+                          onChange={(e) =>
+                            onUpdateRequestStatus(
+                              req.id,
+                              e.target.value as CustomerRequest['status']
+                            )
+                          }
+                          aria-label={`Status for ${req.customerName}`}
+                          className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
                         >
-                          {req.phoneNumber}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono-num">
-                          {new Date(req.createdAt).toLocaleDateString()}
-                        </span>
+                          <option value="NEW">NEW (جديد)</option>
+                          <option value="CONTACTED">
+                            CONTACTED (تم التواصل)
+                          </option>
+                          <option value="COMPLETED">COMPLETED (مكتمل)</option>
+                        </select>
+
+                        {phoneVerified ? (
+                          <a
+                            href={`https://wa.me/${req.phoneNumber.replace(
+                              /\D/g,
+                              ''
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>
+                              {lang === 'ar'
+                                ? 'رد عبر واتساب'
+                                : 'WhatsApp Reply'}
+                            </span>
+                          </a>
+                        ) : (
+                          <span
+                            title={
+                              isAr
+                                ? 'رقم تجريبي غير موثق'
+                                : 'Demo placeholder number'
+                            }
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold cursor-not-allowed"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>
+                              {lang === 'ar'
+                                ? 'واتساب (رقم تجريبي)'
+                                : 'Demo Number'}
+                            </span>
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteCustomerRequest(req.id);
+                            showToast('تم حذف الطلب', 'Request deleted');
+                          }}
+                          className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title={isAr ? 'حذف الطلب' : 'Delete Request'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-
-                      <div className="text-xs font-semibold text-slate-800">
-                        {req.productName[lang]}{' '}
-                        <span className="font-mono-num text-slate-500">
-                          ({req.productSku})
-                        </span>{' '}
-                        —{' '}
-                        <span className="font-mono-num font-bold text-[#111318]">
-                          {formatUsd(req.priceUsdAtRequest)}
-                        </span>{' '}
-                        ({formatSyp(req.priceSypAtRequest, lang)})
-                      </div>
-
-                      {req.note && (
-                        <p className="text-xs text-slate-600 bg-[#F4F3F7] p-2 rounded mt-1">
-                          {lang === 'ar' ? 'ملاحظة الزبون: ' : 'Customer Note: '}
-                          {req.note}
-                        </p>
-                      )}
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <select
-                        value={req.status}
-                        onChange={(e) =>
-                          onUpdateRequestStatus(
-                            req.id,
-                            e.target.value as CustomerRequest['status']
-                          )
-                        }
-                        aria-label={`Status for ${req.customerName}`}
-                        className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
-                      >
-                        <option value="NEW">NEW (جديد)</option>
-                        <option value="CONTACTED">CONTACTED (تم التواصل)</option>
-                        <option value="COMPLETED">COMPLETED (مكتمل)</option>
-                      </select>
-
-                      <a
-                        href={`https://wa.me/${req.phoneNumber.replace(
-                          /\D/g,
-                          ''
-                        )}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        <span>
-                          {lang === 'ar' ? 'رد عبر واتساب' : 'WhatsApp Reply'}
-                        </span>
-                      </a>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
           {/* TAB 5: CATEGORIES & SUBCATEGORIES */}
           {activeTab === 'categories' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-                <h2 className="text-base font-extrabold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'إضافة قسم رئيسي أو فرعي جديد'
-                    : 'Add Category or Subcategory'}
-                </h2>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!newCatNameAr.trim() || !newCatNameEn.trim()) return;
-                    onSaveCategory({
-                      id: `cat-${Date.now()}`,
-                      name: { ar: newCatNameAr.trim(), en: newCatNameEn.trim() },
-                      description: {
-                        ar: 'قسم مضاف من لوحة الإدارة',
-                        en: 'Admin-created hardware category',
-                      },
-                      iconKey: 'cpu',
-                      parentId:
-                        newCatParentId === 'NONE' ? undefined : newCatParentId,
-                      useCaseIds: ['gaming', 'office'],
-                      visualKey: 'cat-components',
-                    });
-                    setNewCatNameAr('');
-                    setNewCatNameEn('');
-                    showToast('تمت إضافة القسم بنجاح', 'Category added');
-                  }}
-                  className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
-                >
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {lang === 'ar' ? 'الاسم بالعربية' : 'Arabic Name'}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newCatNameAr}
-                      onChange={(e) => setNewCatNameAr(e.target.value)}
-                      placeholder="مثال: الشاشات"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {lang === 'ar' ? 'الاسم بالإنكليزية' : 'English Name'}
-                    </label>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      required
-                      value={newCatNameEn}
-                      onChange={(e) => setNewCatNameEn(e.target.value)}
-                      placeholder="e.g. Gaming Monitors"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {lang === 'ar' ? 'يتبع للقسم' : 'Parent Category'}
-                    </label>
-                    <select
-                      value={newCatParentId}
-                      onChange={(e) => setNewCatParentId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                    >
-                      <option value="NONE">
-                        {lang === 'ar'
-                          ? 'قسم رئيسي مستقل'
-                          : 'Top-Level Category'}
-                      </option>
-                      {categories
-                        .filter((c) => !c.parentId)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name[lang]}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="py-2 px-4 rounded-lg bg-[#8E4DEB] text-white text-xs font-bold"
-                  >
-                    {lang === 'ar' ? 'إضافة القسم' : 'Add Category'}
-                  </button>
-                </form>
-              </div>
-
-              <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-                <h2 className="text-sm font-bold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'شجرة الأقسام الرئيسية والفرعية الحالية'
-                    : 'Category Hierarchy'}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {categories
-                    .filter((c) => !c.parentId)
-                    .map((parent) => {
-                      const subs = categories.filter(
-                        (s) => s.parentId === parent.id
-                      );
-                      return (
-                        <div
-                          key={parent.id}
-                          className="p-4 rounded-xl border border-slate-200 space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-extrabold text-[#111318]">
-                              {parent.name[lang]}
-                            </span>
-                            <span className="text-[11px] font-mono-num text-slate-400">
-                              {subs.length} subcategories
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {subs.map((s) => (
-                              <span
-                                key={s.id}
-                                className="px-2.5 py-1 rounded bg-[#F4F3F7] text-xs font-medium text-slate-700"
-                              >
-                                {s.name[lang]}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <AdminCategoriesPanel
+              categories={categories}
+              products={products}
+              useCaseTags={useCaseTags}
+              lang={lang}
+              onSaveCategory={(cat) => {
+                onSaveCategory(cat);
+                showToast('تم حفظ بيانات القسم بنجاح', 'Category saved');
+              }}
+              onDeleteCategory={(id) => {
+                onDeleteCategory(id);
+                showToast('تم حذف القسم بنجاح', 'Category deleted');
+              }}
+            />
           )}
 
           {/* TAB 6: USE-CASE TAGS MANAGEMENT */}
           {activeTab === 'usecases' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-4">
-                <div>
-                  <h2 className="text-base font-extrabold text-[#111318]">
-                    {lang === 'ar'
-                      ? 'إدارة وسوم الاستخدام (Use-Case Selector Tags)'
-                      : 'Manage Use-Case Selector Tags'}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {lang === 'ar'
-                      ? 'تظهر هذه الوسوم كبطاقات اختيار بارزة أعلى صفحات الأقسام (مثل: ألعاب Gaming / مكتبي Office / دراسة Work & Study)'
-                      : 'These tags power the prominent visual Use-Case Selector tiles at the top of category pages'}
-                  </p>
-                </div>
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!newTagAr.trim() || !newTagEn.trim()) return;
-                    onSaveUseCaseTag({
-                      id: `uc-${Date.now()}`,
-                      name: { ar: newTagAr.trim(), en: newTagEn.trim() },
-                      subtitle: {
-                        ar: 'وسم استخدام مخصص من الإدارة',
-                        en: 'Custom use-case workflow filter',
-                      },
-                      applicableCategories: [
-                        'laptops',
-                        'accessories',
-                        'keyboards',
-                        'mice',
-                      ],
-                      accentColor: 'purple',
-                      visualKey: 'usecase-gaming',
-                    });
-                    setNewTagAr('');
-                    setNewTagEn('');
-                    showToast('تمت إضافة وسم الاستخدام', 'Use-Case Tag Added');
-                  }}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"
-                >
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {lang === 'ar' ? 'اسم الوسم (عربي)' : 'Tag Name (AR)'}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newTagAr}
-                      onChange={(e) => setNewTagAr(e.target.value)}
-                      placeholder="مثال: صناعة المحتوى والستريم"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {lang === 'ar' ? 'اسم الوسم (إنكليزي)' : 'Tag Name (EN)'}
-                    </label>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      required
-                      value={newTagEn}
-                      onChange={(e) => setNewTagEn(e.target.value)}
-                      placeholder="e.g. Streaming & Content Creation"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="py-2 px-4 rounded-lg bg-[#8E4DEB] text-white text-xs font-bold"
-                  >
-                    {lang === 'ar' ? 'إضافة وسم استخدام' : 'Add Use-Case Tag'}
-                  </button>
-                </form>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  {useCaseTags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      className="p-4 rounded-xl border border-slate-200 flex items-start justify-between gap-3"
-                    >
-                      <div>
-                        <div className="text-sm font-bold text-[#111318]">
-                          {tag.name[lang]}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {tag.subtitle[lang]}
-                        </div>
-                        <div className="text-[11px] font-mono-num text-[#8E4DEB] mt-2">
-                          Applies to: {tag.applicableCategories.join(', ')}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <AdminUseCasesPanel
+              useCaseTags={useCaseTags}
+              categories={categories}
+              products={products}
+              lang={lang}
+              onSaveUseCaseTag={(tag) => {
+                onSaveUseCaseTag(tag);
+                showToast(
+                  'تم حفظ وسم الاستخدام بنجاح',
+                  'Use-Case Tag saved'
+                );
+              }}
+              onDeleteUseCaseTag={(id) => {
+                onDeleteUseCaseTag(id);
+                showToast('تم حذف وسم الاستخدام', 'Use-Case Tag deleted');
+              }}
+            />
           )}
 
           {/* TAB 7: BRANDS MANAGEMENT */}
           {activeTab === 'brands' && (
-            <div className="bg-white rounded-xl border border-slate-200/90 p-5 space-y-5">
-              <h2 className="text-base font-extrabold text-[#111318]">
-                {lang === 'ar'
-                  ? 'إدارة العلامات التجارية والوكالات (Brands)'
-                  : 'Brands Management'}
-              </h2>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newBrandName.trim()) return;
-                  onSaveBrand({
-                    id: newBrandName.toLowerCase().replace(/\s+/g, '-'),
-                    name: newBrandName.trim(),
-                    country: { ar: newBrandCountryAr, en: newBrandCountryEn },
-                    featured: true,
-                  });
-                  setNewBrandName('');
-                  showToast('تمت إضافة العلامة التجارية', 'Brand added');
-                }}
-                className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
-              >
-                <div>
-                  <label className="block text-xs font-bold mb-1">
-                    {lang === 'ar' ? 'اسم الشركة' : 'Brand Name'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newBrandName}
-                    onChange={(e) => setNewBrandName(e.target.value)}
-                    placeholder="e.g. MSI / Corsair"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">
-                    {lang === 'ar' ? 'بلد المنشأ (عربي)' : 'Origin (AR)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={newBrandCountryAr}
-                    onChange={(e) => setNewBrandCountryAr(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">
-                    {lang === 'ar' ? 'بلد المنشأ (إنكليزي)' : 'Origin (EN)'}
-                  </label>
-                  <input
-                    type="text"
-                    dir="ltr"
-                    value={newBrandCountryEn}
-                    onChange={(e) => setNewBrandCountryEn(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="py-2 px-4 rounded-lg bg-[#8E4DEB] text-white text-xs font-bold"
-                >
-                  {lang === 'ar' ? 'إضافة علامة تجارية' : 'Add Brand'}
-                </button>
-              </form>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {brands.map((b) => (
-                  <div
-                    key={b.id}
-                    className="p-3.5 rounded-lg border border-slate-200 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-extrabold text-[#111318]">
-                        {b.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {b.country[lang]}
-                      </div>
-                    </div>
-                    <span className="font-mono-num text-xs text-slate-400">
-                      {products.filter((p) => p.brandId === b.id).length} items
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AdminBrandsPanel
+              brands={brands}
+              products={products}
+              lang={lang}
+              onSaveBrand={(brand) => {
+                onSaveBrand(brand);
+                showToast(
+                  'تم حفظ العلامة التجارية بنجاح',
+                  'Brand saved successfully'
+                );
+              }}
+              onDeleteBrand={(id) => {
+                onDeleteBrand(id);
+                showToast('تم حذف العلامة التجارية', 'Brand deleted');
+              }}
+            />
           )}
 
           {/* TAB 8: MODEST & CREDIBLE ANALYTICS (No Fake Completed-Sale Stats) */}
@@ -2147,17 +2474,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* TAB 9: STORE SETTINGS & GLOBAL USD-TO-SYP EXCHANGE RATE */}
           {activeTab === 'settings' && (
             <div className="bg-white rounded-xl border border-slate-200/90 p-6 space-y-6">
-              <div>
-                <h1 className="text-base font-extrabold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'إعدادات المتجر وسعر الصرف العام (Store Settings)'
-                    : 'Store Identity, Exchange Rate & Contact Settings'}
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {lang === 'ar'
-                    ? 'عند تعديل سعر صرف الدولار مقابل الليرة السورية هنا، يتم تحديث جميع أسعار المنتجات والعروض في المتجر فوراً'
-                    : 'Updating the global USD-to-SYP exchange rate immediately recalculates all SYP prices across the storefront'}
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-base font-extrabold text-[#111318]">
+                    {lang === 'ar'
+                      ? 'إعدادات المتجر وسعر الصرف العام (Store Settings)'
+                      : 'Store Identity, Exchange Rate & Contact Settings'}
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === 'ar'
+                      ? 'عند تعديل سعر صرف الدولار مقابل الليرة السورية هنا، يتم تحديث جميع أسعار المنتجات والعروض في المتجر فوراً'
+                      : 'Updating the global USD-to-SYP exchange rate immediately recalculates all SYP prices across the storefront'}
+                  </p>
+                </div>
+
+                {onResetDemoData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onResetDemoData();
+                      showToast(
+                        'تمت استعادة البيانات الافتراضية للمتجر',
+                        'Demo data reset to factory defaults'
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700 shrink-0 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>
+                      {isAr
+                        ? 'استعادة البيانات التجريبية الافتراضية'
+                        : 'Reset Demo Data'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               <form
@@ -2212,14 +2562,109 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Contact & WhatsApp Settings */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Store Identity & Address */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                   <div>
                     <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'الرقم الرئيسي المعروض (Primary Phone)'
-                        : 'Primary Public Phone Number'}
+                      {isAr ? 'اسم المتجر (عربي)' : 'Store Name (AR)'}
                     </label>
+                    <input
+                      type="text"
+                      value={localSettings.storeName.ar}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          storeName: {
+                            ...localSettings.storeName,
+                            ar: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {isAr ? 'اسم المتجر (EN)' : 'Store Name (EN)'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.storeName.en}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          storeName: {
+                            ...localSettings.storeName,
+                            en: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {isAr ? 'عنوان المتجر (عربي)' : 'Store Address (AR)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={localSettings.address.ar}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          address: {
+                            ...localSettings.address,
+                            ar: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#111318] mb-1">
+                      {isAr ? 'عنوان المتجر (EN)' : 'Store Address (EN)'}
+                    </label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.address.en}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          address: {
+                            ...localSettings.address,
+                            en: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Contact & WhatsApp Settings with Live Verification Status Badges */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'الرقم الرئيسي المعروض (Primary Phone)'
+                          : 'Primary Public Phone Number'}
+                      </label>
+                      {isPhoneLinkVerified(localSettings.phone) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          <ShieldCheck className="w-3 h-3" />
+                          {isAr ? 'مفعّل في المتجر' : 'Verified Active'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          <ShieldAlert className="w-3 h-3" />
+                          {isAr ? 'غير موثق (معطل)' : 'Unverified'}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2235,11 +2680,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'الرقم الثاني (يظهر كأيقونة اتصال)'
-                        : 'Secondary Phone (Icon-Only Trigger)'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'الرقم الثاني (اختياري)'
+                          : 'Secondary Phone (Optional)'}
+                      </label>
+                      {isPhoneLinkVerified(localSettings.secondaryPhone) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          <ShieldCheck className="w-3 h-3" />
+                          {isAr ? 'مفعّل' : 'Verified'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          {isAr ? 'مخفي حتى التوثيق' : 'Hidden Until Verified'}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2255,11 +2712,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'رقم واتساب لاستقبال الطلبات (أيقونة)'
-                        : 'WhatsApp Number (Icon-Only Trigger)'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'رقم واتساب لاستقبال الطلبات'
+                          : 'WhatsApp Number for Orders'}
+                      </label>
+                      {isWhatsappLinkVerified(localSettings.whatsappNumber) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          <ShieldCheck className="w-3 h-3" />
+                          {isAr ? 'واتساب مفعّل' : 'WhatsApp Verified'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          <ShieldAlert className="w-3 h-3" />
+                          {isAr ? 'غير موثق' : 'Unverified'}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2275,11 +2745,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'رابط موقع المتجر على Google Maps (أيقونة)'
-                        : 'Google Maps Location URL (Icon-Only Trigger)'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'رابط موقع المتجر على Google Maps'
+                          : 'Google Maps Location URL'}
+                      </label>
+                      {isExternalChannelVerified(localSettings.mapLocationUrl) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          <ShieldCheck className="w-3 h-3" />
+                          {isAr ? 'إحداثيات موثقة' : 'Verified Map Link'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          {isAr ? 'غير مضبوط (مخفي)' : 'Unconfigured'}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="url"
                       dir="ltr"
@@ -2345,11 +2827,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'رابط قناة تلغرام (Telegram)'
-                        : 'Telegram Channel URL'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'رابط قناة تلغرام (Telegram)'
+                          : 'Telegram Channel URL'}
+                      </label>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        {isExternalChannelVerified(localSettings.telegramChannel)
+                          ? isAr
+                            ? 'مفعّل'
+                            : 'Active'
+                          : isAr
+                          ? 'مخفي'
+                          : 'Hidden'}
+                      </span>
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2365,11 +2858,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'رابط إنستغرام (Instagram)'
-                        : 'Instagram Page URL'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'رابط إنستغرام (Instagram)'
+                          : 'Instagram Page URL'}
+                      </label>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        {isExternalChannelVerified(localSettings.instagramHandle)
+                          ? isAr
+                            ? 'مفعّل'
+                            : 'Active'
+                          : isAr
+                          ? 'مخفي'
+                          : 'Hidden'}
+                      </span>
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2385,11 +2889,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111318] mb-1">
-                      {lang === 'ar'
-                        ? 'رابط فيسبوك (Facebook)'
-                        : 'Facebook Page URL'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#111318]">
+                        {lang === 'ar'
+                          ? 'رابط فيسبوك (Facebook)'
+                          : 'Facebook Page URL'}
+                      </label>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        {isExternalChannelVerified(localSettings.facebookPage)
+                          ? isAr
+                            ? 'مفعّل'
+                            : 'Active'
+                          : isAr
+                          ? 'مخفي'
+                          : 'Hidden'}
+                      </span>
+                    </div>
                     <input
                       type="text"
                       dir="ltr"
@@ -2456,7 +2971,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold"
+                    className="px-6 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold cursor-pointer"
                   >
                     {lang === 'ar'
                       ? 'حفظ الإعدادات وتحديث الأسعار'
@@ -2479,8 +2994,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {lang === 'ar'
-                      ? 'إضافة، تعديل، أو تفعيل/إيقاف الخدمات المعروضة في قسم الخدمات وتبويب حلول التبريد في المتجر'
-                      : 'Create, edit, or toggle active status for store services and cooling solutions'}
+                      ? 'إضافة، تعديل، أو تفعيل/إيقاف الخدمات المعروضة مع إدارة صورة الغلاف ومعرض الصور الـ 5 لكل خدمة'
+                      : 'Create, edit, or toggle active status for store services including cover image and 5-image gallery'}
                   </p>
                 </div>
                 <button
@@ -2492,7 +3007,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       slug: `service-${Date.now()}`,
                       title: { ar: '', en: '' },
                       subtitle: { ar: '', en: '' },
+                      summary: { ar: '', en: '' },
                       description: { ar: '', en: '' },
+                      primaryImage: '/assets/services/maintenance-1.svg',
+                      galleryImages: [
+                        '/assets/services/maintenance-1.svg',
+                        '/assets/services/maintenance-2.svg',
+                        '/assets/services/maintenance-3.svg',
+                        '/assets/services/maintenance-4.svg',
+                        '/assets/services/maintenance-5.svg',
+                      ],
                       iconKey: 'maintenance',
                       badge: {
                         ar: 'خدمة فنية معتمدة',
@@ -2501,6 +3025,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       turnaroundNote: {
                         ar: 'مدة التنفيذ: خلال 24 ساعة',
                         en: 'Turnaround: Within 24 hours',
+                      },
+                      startingPriceNote: {
+                        ar: 'فحص أولي مجاني',
+                        en: 'Free initial check',
                       },
                       isActive: true,
                       isFeatured: false,
@@ -2536,7 +3064,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       ],
                     })
                   }
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold shrink-0"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold shrink-0 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>
@@ -2550,18 +3078,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   data-testid="admin-service-editor-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    onSaveService(editingService);
+                    const normalizedGallery = getServiceGalleryImages(editingService);
+                    onSaveService({
+                      ...editingService,
+                      primaryImage:
+                        normalizedGallery[0] ||
+                        editingService.primaryImage ||
+                        '/assets/services/maintenance-1.svg',
+                      galleryImages: normalizedGallery,
+                    });
                     setEditingService(null);
                     showToast(
-                      'تم حفظ بيانات الخدمة بنجاح',
-                      'Service saved successfully'
+                      'تم حفظ بيانات الخدمة ومعرض الصور بنجاح',
+                      'Service & gallery images saved successfully'
                     );
                   }}
-                  className="bg-white rounded-xl border-2 border-[#8E4DEB] p-6 space-y-4"
+                  className="bg-white rounded-xl border-2 border-[#8E4DEB] p-6 space-y-5"
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <h2 className="text-sm font-extrabold text-[#111318]">
-                      {lang === 'ar' ? 'محرر الخدمة الفنية' : 'Service Editor'}
+                      {lang === 'ar'
+                        ? 'محرر الخدمة الفنية ومعرض الصور (Service & Gallery Editor)'
+                        : 'Service & Gallery Editor'}
                     </h2>
                     <button
                       type="button"
@@ -2620,19 +3158,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
 
+                  {/* Summary / Short Card Overview */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold mb-1">
                         {lang === 'ar'
-                          ? 'العنوان الفرعي المختصر (عربي)'
-                          : 'Subtitle (Arabic)'}
+                          ? 'ملخص الخدمة المختصر لبطاقة العرض (عربي)'
+                          : 'Short Card Summary (Arabic)'}
                       </label>
                       <input
                         type="text"
-                        value={editingService.subtitle.ar}
+                        value={
+                          editingService.summary?.ar ??
+                          editingService.subtitle.ar
+                        }
                         onChange={(e) =>
                           setEditingService({
                             ...editingService,
+                            summary: {
+                              ar: e.target.value,
+                              en:
+                                editingService.summary?.en ??
+                                editingService.subtitle.en,
+                            },
                             subtitle: {
                               ...editingService.subtitle,
                               ar: e.target.value,
@@ -2645,16 +3193,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div>
                       <label className="block text-xs font-bold mb-1">
                         {lang === 'ar'
-                          ? 'العنوان الفرعي المختصر (إنكليزي)'
-                          : 'Subtitle (English)'}
+                          ? 'ملخص الخدمة المختصر لبطاقة العرض (إنكليزي)'
+                          : 'Short Card Summary (English)'}
                       </label>
                       <input
                         type="text"
                         dir="ltr"
-                        value={editingService.subtitle.en}
+                        value={
+                          editingService.summary?.en ??
+                          editingService.subtitle.en
+                        }
                         onChange={(e) =>
                           setEditingService({
                             ...editingService,
+                            summary: {
+                              ar:
+                                editingService.summary?.ar ??
+                                editingService.subtitle.ar,
+                              en: e.target.value,
+                            },
                             subtitle: {
                               ...editingService.subtitle,
                               en: e.target.value,
@@ -2671,7 +3228,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <label className="block text-xs font-bold mb-1">
                         {lang === 'ar'
                           ? 'وصف الخدمة التفصيلي (عربي)'
-                          : 'Description (Arabic)'}
+                          : 'Detailed Description (Arabic)'}
                       </label>
                       <textarea
                         rows={3}
@@ -2692,7 +3249,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <label className="block text-xs font-bold mb-1">
                         {lang === 'ar'
                           ? 'وصف الخدمة التفصيلي (إنكليزي)'
-                          : 'Description (English)'}
+                          : 'Detailed Description (English)'}
                       </label>
                       <textarea
                         rows={3}
@@ -2703,6 +3260,397 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             ...editingService,
                             description: {
                               ...editingService.description,
+                              en: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* UP TO 5-IMAGE SERVICE GALLERY & COVER IMAGE MANAGER */}
+                  <div
+                    data-testid="admin-service-gallery-manager"
+                    className="p-4 rounded-xl bg-[#FAF9FC] border border-slate-200/90 space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-extrabold text-[#111318] flex items-center gap-1.5">
+                          <Images className="w-4 h-4 text-[#8E4DEB]" />
+                          <span>
+                            {isAr
+                              ? 'صورة الغلاف ومعرض صور الخدمة (حتى 5 صور مع التحكم بالترتيب والحذف)'
+                              : 'Service Cover Image & Detail Gallery (Up to 5 Images · Order & Remove)'}
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {isAr
+                            ? 'الصورة رقم 1 هي صورة الغلاف الرئيسية؛ يمكنك تعيين أي صورة كغلاف أو تغيير ترتيبها أو حذفها.'
+                            : 'Slot #1 is the primary Cover Image; promote any slot to cover, reorder, or remove images.'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(
+                          [
+                            {
+                              labelAr: 'تعبئة صور التبريد (5)',
+                              labelEn: 'Load Cooling Set (5)',
+                              family: 'cooling',
+                            },
+                            {
+                              labelAr: 'تعبئة صور الصيانة (5)',
+                              labelEn: 'Load Maintenance Set (5)',
+                              family: 'maintenance',
+                            },
+                            {
+                              labelAr: 'تعبئة صور الكاميرات (5)',
+                              labelEn: 'Load Cameras Set (5)',
+                              family: 'cameras',
+                            },
+                          ] as const
+                        ).map((preset) => (
+                          <button
+                            key={preset.family}
+                            type="button"
+                            data-testid={`admin-service-preset-${preset.family}`}
+                            onClick={() => {
+                              const nextSet = [
+                                `/assets/services/${preset.family}-1.svg`,
+                                `/assets/services/${preset.family}-2.svg`,
+                                `/assets/services/${preset.family}-3.svg`,
+                                `/assets/services/${preset.family}-4.svg`,
+                                `/assets/services/${preset.family}-5.svg`,
+                              ];
+                              setEditingService({
+                                ...editingService,
+                                primaryImage: nextSet[0],
+                                galleryImages: nextSet,
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded bg-white hover:bg-[#8E4DEB] hover:text-white border border-slate-200 text-[11px] font-bold text-slate-700 transition-colors cursor-pointer"
+                          >
+                            {isAr ? preset.labelAr : preset.labelEn}
+                          </button>
+                        ))}
+
+                        {getServiceGalleryImages(editingService).length < 5 && (
+                          <button
+                            type="button"
+                            data-testid="admin-service-add-image-btn"
+                            onClick={() => {
+                              const current =
+                                getServiceGalleryImages(editingService);
+                              if (current.length >= 5) return;
+                              const family = editingService.iconKey || 'maintenance';
+                              const candidates = [
+                                `/assets/services/${family}-1.svg`,
+                                `/assets/services/${family}-2.svg`,
+                                `/assets/services/${family}-3.svg`,
+                                `/assets/services/${family}-4.svg`,
+                                `/assets/services/${family}-5.svg`,
+                              ];
+                              const nextCandidate =
+                                candidates.find((c) => !current.includes(c)) ||
+                                candidates[current.length] ||
+                                `/assets/services/${family}-1.svg`;
+                              const updated = [...current, nextCandidate];
+                              setEditingService({
+                                ...editingService,
+                                primaryImage: updated[0],
+                                galleryImages: updated,
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#111318] hover:bg-[#8E4DEB] text-white text-[11px] font-bold transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>
+                              {isAr ? 'إضافة صورة للمعرض' : 'Add Gallery Image'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                      {getServiceGalleryImages(editingService).map(
+                        (slotKey, slotIdx, currentGallery) => (
+                          <div
+                            key={`${slotIdx}-${slotKey}`}
+                            data-testid={`admin-service-slot-${slotIdx}`}
+                            className={`rounded-lg bg-white border p-2.5 space-y-2 ${
+                              slotIdx === 0
+                                ? 'border-[#8E4DEB] ring-1 ring-[#8E4DEB]/30'
+                                : 'border-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                              <span
+                                className={
+                                  slotIdx === 0
+                                    ? 'text-[#8E4DEB]'
+                                    : 'text-slate-600'
+                                }
+                              >
+                                {slotIdx === 0
+                                  ? isAr
+                                    ? '1 · صورة الغلاف'
+                                    : '1 · Cover Image'
+                                  : `${slotIdx + 1} · Gallery`}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {/* Move Earlier */}
+                                <button
+                                  type="button"
+                                  data-testid={`admin-service-move-prev-${slotIdx}`}
+                                  disabled={slotIdx === 0}
+                                  title={
+                                    isAr ? 'تحريك للأولوية' : 'Move earlier'
+                                  }
+                                  onClick={() => {
+                                    if (slotIdx === 0) return;
+                                    const updated = [...currentGallery];
+                                    const temp = updated[slotIdx - 1];
+                                    updated[slotIdx - 1] = updated[slotIdx];
+                                    updated[slotIdx] = temp;
+                                    setEditingService({
+                                      ...editingService,
+                                      primaryImage: updated[0],
+                                      galleryImages: updated,
+                                    });
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-35 text-[10px] font-bold text-slate-700 cursor-pointer disabled:cursor-not-allowed"
+                                >
+                                  ←
+                                </button>
+                                {/* Move Later */}
+                                <button
+                                  type="button"
+                                  data-testid={`admin-service-move-next-${slotIdx}`}
+                                  disabled={
+                                    slotIdx === currentGallery.length - 1
+                                  }
+                                  title={isAr ? 'تحريك للخلف' : 'Move later'}
+                                  onClick={() => {
+                                    if (slotIdx >= currentGallery.length - 1)
+                                      return;
+                                    const updated = [...currentGallery];
+                                    const temp = updated[slotIdx + 1];
+                                    updated[slotIdx + 1] = updated[slotIdx];
+                                    updated[slotIdx] = temp;
+                                    setEditingService({
+                                      ...editingService,
+                                      primaryImage: updated[0],
+                                      galleryImages: updated,
+                                    });
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-35 text-[10px] font-bold text-slate-700 cursor-pointer disabled:cursor-not-allowed"
+                                >
+                                  →
+                                </button>
+                                {/* Remove Image (when > 1 image exists) */}
+                                {currentGallery.length > 1 && (
+                                  <button
+                                    type="button"
+                                    data-testid={`admin-service-remove-image-${slotIdx}`}
+                                    title={isAr ? 'حذف الصورة' : 'Remove image'}
+                                    onClick={() => {
+                                      const updated = currentGallery.filter(
+                                        (_, idx) => idx !== slotIdx
+                                      );
+                                      setEditingService({
+                                        ...editingService,
+                                        primaryImage: updated[0],
+                                        galleryImages: updated,
+                                      });
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 text-[10px] font-bold transition-colors cursor-pointer"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="aspect-[4/3] w-full rounded bg-[#F8F7FA] border border-slate-200/80 overflow-hidden">
+                              <ProductVisual
+                                visualKey={slotKey}
+                                alt={`Service slot ${slotIdx + 1}`}
+                              />
+                            </div>
+
+                            {slotIdx !== 0 && (
+                              <button
+                                type="button"
+                                data-testid={`admin-service-set-primary-${slotIdx}`}
+                                onClick={() => {
+                                  const selected = currentGallery[slotIdx];
+                                  const rest = currentGallery.filter(
+                                    (_, idx) => idx !== slotIdx
+                                  );
+                                  const updated = [selected, ...rest];
+                                  setEditingService({
+                                    ...editingService,
+                                    primaryImage: selected,
+                                    galleryImages: updated,
+                                  });
+                                }}
+                                className="w-full py-1 px-2 rounded bg-[#8E4DEB]/10 hover:bg-[#8E4DEB] text-[#8E4DEB] hover:text-white text-[10px] font-extrabold transition-colors cursor-pointer"
+                              >
+                                {isAr
+                                  ? 'تعيين كصورة غلاف رئيسية'
+                                  : 'Set as Primary Cover'}
+                              </button>
+                            )}
+
+                            <input
+                              type="text"
+                              dir="ltr"
+                              data-testid={`admin-service-input-${slotIdx}`}
+                              value={slotKey}
+                              onChange={(e) => {
+                                const updated = [...currentGallery];
+                                updated[slotIdx] = e.target.value;
+                                setEditingService({
+                                  ...editingService,
+                                  primaryImage:
+                                    slotIdx === 0
+                                      ? e.target.value
+                                      : updated[0],
+                                  galleryImages: updated,
+                                });
+                              }}
+                              className="w-full px-2 py-1 rounded border border-slate-300 text-[11px] font-mono-num"
+                            />
+                            <select
+                              value={slotKey}
+                              data-testid={`admin-service-select-${slotIdx}`}
+                              onChange={(e) => {
+                                const updated = [...currentGallery];
+                                updated[slotIdx] = e.target.value;
+                                setEditingService({
+                                  ...editingService,
+                                  primaryImage:
+                                    slotIdx === 0
+                                      ? e.target.value
+                                      : updated[0],
+                                  galleryImages: updated,
+                                });
+                              }}
+                              className="w-full px-1.5 py-1 rounded border border-slate-200 text-[10px] font-mono-num bg-slate-50"
+                            >
+                              {VISUAL_KEY_PRESETS.map((grp) => (
+                                <optgroup key={grp.group} label={grp.group}>
+                                  {grp.keys.map((k) => (
+                                    <option key={k} value={k}>
+                                      {k}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Badge, Turnaround Note & Icon Key */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {isAr ? 'الشارة (عربي)' : 'Badge (AR)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={editingService.badge.ar}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            badge: {
+                              ...editingService.badge,
+                              ar: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {isAr ? 'الشارة (EN)' : 'Badge (EN)'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={editingService.badge.en}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            badge: {
+                              ...editingService.badge,
+                              en: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {isAr ? 'أيقونة الخدمة (Icon Key)' : 'Icon Key'}
+                      </label>
+                      <select
+                        value={editingService.iconKey}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            iconKey: e.target.value as StoreService['iconKey'],
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white font-mono-num"
+                      >
+                        <option value="cooling">cooling</option>
+                        <option value="maintenance">maintenance</option>
+                        <option value="cameras">cameras</option>
+                        <option value="custom">custom</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {isAr ? 'ملاحظة مدة التنفيذ (عربي)' : 'Turnaround Note (AR)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={editingService.turnaroundNote.ar}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            turnaroundNote: {
+                              ...editingService.turnaroundNote,
+                              ar: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1">
+                        {isAr ? 'ملاحظة مدة التنفيذ (EN)' : 'Turnaround Note (EN)'}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={editingService.turnaroundNote.en}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            turnaroundNote: {
+                              ...editingService.turnaroundNote,
                               en: e.target.value,
                             },
                           })
@@ -2748,12 +3696,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {lang === 'ar' ? 'خدمة مميزة (Featured)' : 'Featured'}
                       </span>
                     </label>
+
+                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingService.showInNavbarShortcut}
+                        onChange={(e) =>
+                          setEditingService({
+                            ...editingService,
+                            showInNavbarShortcut: e.target.checked,
+                          })
+                        }
+                        className="rounded text-[#8E4DEB]"
+                      />
+                      <span>
+                        {isAr
+                          ? 'إظهار كاختصار في شريط التنقل'
+                          : 'Show in Navbar Shortcut'}
+                      </span>
+                    </label>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold"
+                      className="px-5 py-2 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold cursor-pointer"
                     >
                       {lang === 'ar' ? 'حفظ الخدمة' : 'Save Service'}
                     </button>
@@ -2762,95 +3729,112 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
 
               <div className="grid grid-cols-1 gap-4">
-                {services.map((srv) => (
-                  <div
-                    key={srv.id}
-                    data-testid={`admin-service-row-${srv.id}`}
-                    className="bg-white rounded-xl border border-slate-200/90 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1 max-w-2xl">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-extrabold text-[#111318]">
-                          {srv.title[lang]}
-                        </span>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                            srv.isActive
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {srv.isActive
-                            ? lang === 'ar'
-                              ? 'نشطة'
-                              : 'Active'
-                            : lang === 'ar'
-                            ? 'مخفية'
-                            : 'Inactive'}
-                        </span>
-                        {srv.id === 'service-cooling' && (
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-bold">
-                            {lang === 'ar'
-                              ? 'مرتبطة بتبويب حلول التبريد في الشريط العلوي'
-                              : 'Linked to Top Navbar Cooling Tab'}
-                          </span>
-                        )}
+                {services.map((srv) => {
+                  const srvGallery = getServiceGalleryImages(srv);
+                  return (
+                    <div
+                      key={srv.id}
+                      data-testid={`admin-service-row-${srv.id}`}
+                      className="bg-white rounded-xl border border-slate-200/90 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-start gap-3.5 max-w-2xl">
+                        <div className="w-20 h-14 rounded-lg bg-[#F8F7FA] border border-slate-200 overflow-hidden shrink-0">
+                          <ProductVisual
+                            visualKey={srvGallery[0]}
+                            alt={srv.title[lang]}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-extrabold text-[#111318]">
+                              {srv.title[lang]}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                              <Images className="w-3 h-3 text-[#8E4DEB]" />
+                              {srvGallery.length}/5
+                            </span>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                srv.isActive
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {srv.isActive
+                                ? lang === 'ar'
+                                  ? 'نشطة'
+                                  : 'Active'
+                                : lang === 'ar'
+                                ? 'مخفية'
+                                : 'Inactive'}
+                            </span>
+                            {srv.id === 'service-cooling' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-bold">
+                                {lang === 'ar'
+                                  ? 'مرتبطة بتبويب حلول التبريد في الشريط العلوي'
+                                  : 'Linked to Top Navbar Cooling Tab'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-[#8E4DEB]">
+                            {srv.summary?.[lang] || srv.subtitle[lang]}
+                          </p>
+                          <p className="text-xs text-slate-500 line-clamp-2">
+                            {srv.description[lang]}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs font-semibold text-[#8E4DEB]">
-                        {srv.subtitle[lang]}
-                      </p>
-                      <p className="text-xs text-slate-500 line-clamp-2">
-                        {srv.description[lang]}
-                      </p>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSaveService({ ...srv, isActive: !srv.isActive });
-                          showToast(
-                            'تم تحديث حالة الخدمة',
-                            'Service status updated'
-                          );
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 hover:border-[#8E4DEB] text-xs font-bold text-slate-700"
-                      >
-                        {srv.isActive
-                          ? lang === 'ar'
-                            ? 'إخفاء مؤقت'
-                            : 'Disable'
-                          : lang === 'ar'
-                          ? 'تفعيل'
-                          : 'Enable'}
-                      </button>
-
-                      <button
-                        type="button"
-                        data-testid={`admin-edit-service-${srv.id}`}
-                        onClick={() => setEditingService({ ...srv })}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-[#111318] text-[#111318] hover:text-white text-xs font-bold transition-colors"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
-                      </button>
-
-                      {srv.id !== 'service-cooling' && (
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
-                            onDeleteService(srv.id);
-                            showToast('تم حذف الخدمة', 'Service deleted');
+                            onSaveService({ ...srv, isActive: !srv.isActive });
+                            showToast(
+                              'تم تحديث حالة الخدمة',
+                              'Service status updated'
+                            );
                           }}
-                          className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                          title={lang === 'ar' ? 'حذف الخدمة' : 'Delete Service'}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:border-[#8E4DEB] text-xs font-bold text-slate-700 cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {srv.isActive
+                            ? lang === 'ar'
+                              ? 'إخفاء مؤقت'
+                              : 'Disable'
+                            : lang === 'ar'
+                            ? 'تفعيل'
+                            : 'Enable'}
                         </button>
-                      )}
+
+                        <button
+                          type="button"
+                          data-testid={`admin-edit-service-${srv.id}`}
+                          onClick={() => setEditingService({ ...srv })}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-[#111318] text-[#111318] hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
+                        </button>
+
+                        {srv.id !== 'service-cooling' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDeleteService(srv.id);
+                              showToast('تم حذف الخدمة', 'Service deleted');
+                            }}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 cursor-pointer"
+                            title={
+                              lang === 'ar' ? 'حذف الخدمة' : 'Delete Service'
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

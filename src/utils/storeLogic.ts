@@ -2,7 +2,9 @@ import type {
   FilterState,
   Language,
   Offer,
+  OfferTemporalStatus,
   Product,
+  StoreService,
 } from '../types/store.ts';
 
 /**
@@ -37,14 +39,27 @@ export function formatSyp(priceSyp: number, lang: Language): string {
 }
 
 /**
- * Determines whether an offer is currently active at a given reference timestamp.
- * Expired offers (now >= endTime) or not-yet-started offers (now < startTime) return false.
+ * Determines the temporal lifecycle state of an offer (ACTIVE, SCHEDULED, or EXPIRED).
  */
-export function isOfferActive(offer: Offer, nowMs: number): boolean {
+export function getOfferTemporalStatus(
+  offer: Offer,
+  nowMs: number
+): OfferTemporalStatus {
+  if (offer.isActive === false) return 'EXPIRED';
   const startMs = new Date(offer.startTime).getTime();
   const endMs = new Date(offer.endTime).getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return false;
-  return nowMs >= startMs && nowMs < endMs;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 'EXPIRED';
+  if (nowMs < startMs) return 'SCHEDULED';
+  if (nowMs >= endMs) return 'EXPIRED';
+  return 'ACTIVE';
+}
+
+/**
+ * Determines whether an offer is currently active at a given reference timestamp.
+ * Expired offers (now >= endTime), disabled offers, or not-yet-started offers (now < startTime) return false.
+ */
+export function isOfferActive(offer: Offer, nowMs: number): boolean {
+  return getOfferTemporalStatus(offer, nowMs) === 'ACTIVE';
 }
 
 /**
@@ -58,6 +73,17 @@ export function getActiveOfferForProduct(
   return offers.find(
     (offer) => offer.productId === productId && isOfferActive(offer, nowMs)
   );
+}
+
+/**
+ * Calculates integer discount percentage between original USD price and discounted offer USD price.
+ */
+export function calculateDiscountPercent(
+  originalUsd: number,
+  offerUsd: number
+): number {
+  if (originalUsd <= 0 || offerUsd >= originalUsd || offerUsd <= 0) return 0;
+  return Math.round(((originalUsd - offerUsd) / originalUsd) * 100);
 }
 
 /**
@@ -90,7 +116,7 @@ export function resolveProductPricing(
   );
 
   const discountPercent = hasActiveOffer
-    ? Math.round(((originalUsd - effectiveUsd) / originalUsd) * 100)
+    ? calculateDiscountPercent(originalUsd, effectiveUsd)
     : 0;
 
   return {
@@ -167,6 +193,7 @@ export function filterAndSortProducts(
   const q = filters.searchQuery.trim().toLowerCase();
 
   const filtered = products.filter((p) => {
+    if (p.isActive === false) return false;
     // Search query match across Arabic name, English name, SKU, and descriptions
     if (q) {
       const hay = [
@@ -275,6 +302,137 @@ export const MAX_PRODUCT_GALLERY_IMAGES = 5;
 export const OFFICIAL_PRIMARY_PHONE_DISPLAY = '+963 933 811 106';
 export const OFFICIAL_PRIMARY_PHONE_TEL = 'tel:+963933811106';
 
+export const VISUAL_KEY_PRESETS: {
+  group: string;
+  keys: string[];
+}[] = [
+  {
+    group: 'Laptops (ROG / LOQ / ThinkPad / VivoBook)',
+    keys: [
+      'laptop-rog-front',
+      'laptop-rog-side',
+      'laptop-rog-ports',
+      'laptop-rog-cooling',
+      'laptop-rog-kit',
+      'laptop-loq-front',
+      'laptop-loq-angled',
+      'laptop-loq-ports',
+      'laptop-loq-cooling',
+      'laptop-loq-kit',
+      'laptop-thinkpad-front',
+      'laptop-thinkpad-top',
+      'laptop-thinkpad-ports',
+      'laptop-thinkpad-cooling',
+      'laptop-thinkpad-kit',
+      'laptop-vivobook-front',
+      'laptop-vivobook-side',
+      'laptop-vivobook-ports',
+      'laptop-vivobook-cooling',
+      'laptop-vivobook-kit',
+    ],
+  },
+  {
+    group: 'Keyboards & Mice (Gaming & Office)',
+    keys: [
+      'kb-fizz-front',
+      'kb-fizz-switches',
+      'kb-fizz-keycaps',
+      'kb-fizz-profile',
+      'kb-fizz-kit',
+      'kb-huntsman-front',
+      'kb-huntsman-dial',
+      'kb-huntsman-keycaps',
+      'kb-huntsman-profile',
+      'kb-huntsman-kit',
+      'kb-mxkeys-front',
+      'kb-mxkeys-side',
+      'kb-mxkeys-keycaps',
+      'kb-mxkeys-profile',
+      'kb-mxkeys-kit',
+      'mouse-superlight-front',
+      'mouse-superlight-side',
+      'mouse-superlight-sensor',
+      'mouse-superlight-grip',
+      'mouse-superlight-kit',
+      'mouse-mxmaster-front',
+      'mouse-mxmaster-wheel',
+      'mouse-mxmaster-sensor',
+      'mouse-mxmaster-grip',
+      'mouse-mxmaster-kit',
+    ],
+  },
+  {
+    group: 'Audio (Headsets / IEM / Earbuds)',
+    keys: [
+      'audio-cloud3-front',
+      'audio-cloud3-mic',
+      'audio-cloud3-driver',
+      'audio-cloud3-acoustic',
+      'audio-cloud3-kit',
+      'audio-iem-front',
+      'audio-iem-cable',
+      'audio-iem-driver',
+      'audio-iem-acoustic',
+      'audio-iem-kit',
+      'audio-earbuds-front',
+      'audio-earbuds-case',
+      'audio-earbuds-driver',
+      'audio-earbuds-acoustic',
+      'audio-earbuds-kit',
+    ],
+  },
+  {
+    group: 'PC Components & Custom Rigs',
+    keys: [
+      'comp-gpu-front',
+      'comp-gpu-backplate',
+      'comp-gpu-cooling',
+      'comp-gpu-pcb',
+      'comp-gpu-kit',
+      'comp-cpu-front',
+      'comp-cpu-chip',
+      'comp-cpu-cooling',
+      'comp-cpu-pcb',
+      'comp-cpu-kit',
+      'comp-mobo-front',
+      'comp-mobo-io',
+      'comp-ram-front',
+      'comp-ram-rgb',
+      'comp-ssd-front',
+      'comp-ssd-installed',
+      'comp-psu-front',
+      'comp-case-front',
+      'build-nebula-front',
+      'build-nebula-angle',
+      'build-nebula-cooling',
+      'build-nebula-pcb',
+      'build-nebula-kit',
+      'acc-charger-front',
+      'acc-charger-ports',
+    ],
+  },
+  {
+    group: 'Services & Technical Workshop (Local Asset Galleries)',
+    keys: [
+      '/assets/services/cooling-1.svg',
+      '/assets/services/cooling-2.svg',
+      '/assets/services/cooling-3.svg',
+      '/assets/services/cooling-4.svg',
+      '/assets/services/cooling-5.svg',
+      '/assets/services/maintenance-1.svg',
+      '/assets/services/maintenance-2.svg',
+      '/assets/services/maintenance-3.svg',
+      '/assets/services/maintenance-4.svg',
+      '/assets/services/maintenance-5.svg',
+      '/assets/services/cameras-1.svg',
+      '/assets/services/cameras-2.svg',
+      '/assets/services/cameras-3.svg',
+      '/assets/services/cameras-4.svg',
+      '/assets/services/cameras-5.svg',
+    ],
+  },
+];
+
 /**
  * Formats a display phone string into a clean tel: URI (e.g., "+963 933 811 106" -> "tel:+963933811106").
  */
@@ -308,6 +466,50 @@ export function getProductGalleryImages(
     }
   }
   return unique;
+}
+
+/**
+ * Returns up to 5 unique gallery image paths/keys for a service.
+ * Respects explicit galleryImages configured by Admin (including fewer than 5 when images are removed),
+ * and falls back to the 5 local /assets/services/*.svg files when unconfigured.
+ */
+export function getServiceGalleryImages(
+  service: Pick<StoreService, 'iconKey' | 'primaryImage' | 'galleryImages'>
+): string[] {
+  const baseFamily =
+    service.iconKey === 'cooling'
+      ? 'cooling'
+      : service.iconKey === 'cameras'
+      ? 'cameras'
+      : 'maintenance';
+
+  const defaultFallbacks = [
+    `/assets/services/${baseFamily}-1.svg`,
+    `/assets/services/${baseFamily}-2.svg`,
+    `/assets/services/${baseFamily}-3.svg`,
+    `/assets/services/${baseFamily}-4.svg`,
+    `/assets/services/${baseFamily}-5.svg`,
+  ];
+
+  const hasExplicitGallery =
+    Array.isArray(service.galleryImages) &&
+    service.galleryImages.some((img) => Boolean((img || '').trim()));
+
+  const candidates = hasExplicitGallery
+    ? [service.primaryImage ?? '', ...(service.galleryImages ?? [])]
+    : [service.primaryImage ?? '', ...defaultFallbacks];
+
+  const unique: string[] = [];
+  for (const item of candidates) {
+    const trimmed = (item || '').trim();
+    if (trimmed && !unique.includes(trimmed)) {
+      unique.push(trimmed);
+      if (unique.length >= MAX_PRODUCT_GALLERY_IMAGES) {
+        break;
+      }
+    }
+  }
+  return unique.length > 0 ? unique : defaultFallbacks;
 }
 
 /**

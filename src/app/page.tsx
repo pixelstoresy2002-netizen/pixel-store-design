@@ -13,6 +13,8 @@ export default function HomeRoutePage() {
     categories,
     brands,
     offers,
+    heroSlides,
+    promoBanners,
     settings,
     effectiveNowMs,
     handleNavigate,
@@ -29,6 +31,8 @@ export default function HomeRoutePage() {
         categories={categories}
         brands={brands}
         offers={offers}
+        heroSlides={heroSlides}
+        promoBanners={promoBanners}
         settings={settings}
         nowMs={effectiveNowMs}
         onNavigate={handleNavigate}

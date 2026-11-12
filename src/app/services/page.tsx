@@ -14,7 +14,6 @@ function ServicesContent() {
   const {
     lang,
     services,
-    selectedServiceId,
     settings,
     setSelectedServiceId,
     handleNavigate,
@@ -25,14 +24,14 @@ function ServicesContent() {
   }, [serviceParam, setSelectedServiceId]);
 
   const effectiveServiceId =
-    serviceParam !== 'ALL' ? serviceParam : selectedServiceId;
+    serviceParam !== 'ALL' ? serviceParam : 'ALL';
 
   const handleSelectService = (srvId: string | 'ALL') => {
     setSelectedServiceId(srvId);
     if (srvId === 'ALL') {
       router.push('/services');
     } else {
-      router.push(`/services?service=${encodeURIComponent(srvId)}`);
+      router.push(`/services/${encodeURIComponent(srvId)}`);
     }
   };
 

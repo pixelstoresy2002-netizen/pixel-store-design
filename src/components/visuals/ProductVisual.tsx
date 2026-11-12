@@ -10,8 +10,11 @@ interface ProductVisualProps {
  * Determines which of the 5 gallery studio angles (1..5) a visualKey represents.
  */
 export function resolveVisualAngleIndex(visualKey: string): 1 | 2 | 3 | 4 | 5 {
-  const key = (visualKey || '').toLowerCase().trim();
-  if (key.endsWith('-kit') || key.endsWith('-view5')) {
+  const key = (visualKey || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\.(svg|png|webp|jpg|jpeg)$/i, '');
+  if (key.endsWith('-kit') || key.endsWith('-view5') || key.endsWith('-5')) {
     return 5;
   }
   if (
@@ -20,7 +23,8 @@ export function resolveVisualAngleIndex(visualKey: string): 1 | 2 | 3 | 4 | 5 {
     key.endsWith('-grip') ||
     key.endsWith('-acoustic') ||
     key.endsWith('-pcb') ||
-    key.endsWith('-view4')
+    key.endsWith('-view4') ||
+    key.endsWith('-4')
   ) {
     return 4;
   }
@@ -30,6 +34,7 @@ export function resolveVisualAngleIndex(visualKey: string): 1 | 2 | 3 | 4 | 5 {
     key.endsWith('-sensor') ||
     key.endsWith('-driver') ||
     key.endsWith('-view3') ||
+    key.endsWith('-3') ||
     (key.includes('laptop') && key.endsWith('-ports'))
   ) {
     return 3;
@@ -54,7 +59,8 @@ export function resolveVisualAngleIndex(visualKey: string): 1 | 2 | 3 | 4 | 5 {
     key.endsWith('-cables') ||
     key.endsWith('-interior') ||
     key.endsWith('-ports') ||
-    key.endsWith('-view2')
+    key.endsWith('-view2') ||
+    key.endsWith('-2')
   ) {
     return 2;
   }
@@ -62,13 +68,8 @@ export function resolveVisualAngleIndex(visualKey: string): 1 | 2 | 3 | 4 | 5 {
 }
 
 /**
- * Studio-grade hardware SVG illustrations for Pixel Store products and categories.
- * Supports up to 5 distinct representative gallery angles per product family:
- * 1: Primary Front Studio View
- * 2: Angled / Side Profile / Switch / Backplate Detail
- * 3: Thermal Architecture / I/O Ports / Sensor / Driver Engineering View
- * 4: Top-Down / Internal PCB / Ergonomic Grip / Acoustic Chamber View
- * 5: Complete Retail Kit / Accessories & Spec Dimensions View
+ * Studio-grade hardware SVG illustrations and local asset renderer for Pixel Store products, categories, and services.
+ * Supports up to 5 distinct representative gallery angles per product/service family.
  */
 export const ProductVisual: React.FC<ProductVisualProps> = ({
   visualKey,
@@ -79,22 +80,28 @@ export const ProductVisual: React.FC<ProductVisualProps> = ({
   const angleIndex = resolveVisualAngleIndex(key);
   const isSecondary = angleIndex === 2;
 
-  // Support external/local raster image paths if configured via Admin
+  // Support external/local raster & SVG image paths (/assets/services/*, /assets/aistudio/*, etc.)
   if (
     key.startsWith('http://') ||
     key.startsWith('https://') ||
     key.startsWith('/assets/')
   ) {
+    const isServiceAsset = key.startsWith('/assets/services/');
     return (
       <div
         className={`relative w-full h-full flex items-center justify-center overflow-hidden select-none bg-gradient-to-b from-[#FAF9FC] to-[#ECEAF2] ${className}`}
+        data-visual-key={visualKey}
+        data-angle-index={angleIndex}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={visualKey}
           alt={alt}
-          loading="lazy"
-          className="w-full h-full object-contain p-2"
+          loading={isServiceAsset ? 'eager' : 'lazy'}
+          className={
+            isServiceAsset
+              ? 'w-full h-full object-cover'
+              : 'w-full h-full object-contain p-2'
+          }
         />
       </div>
     );
@@ -2079,6 +2086,709 @@ export const ProductVisual: React.FC<ProductVisualProps> = ({
                 strokeWidth="2.5"
                 strokeLinecap="round"
               />
+            </g>
+          )}
+        </svg>
+      )}
+
+      {/* 8. TECHNICAL SERVICES & WORKSHOP VISUALS (Cooling, Maintenance, Security Cameras) */}
+      {key.startsWith('service-') && (
+        <svg viewBox="0 0 260 190" className="w-full h-full p-3">
+          {key.includes('cooling') ? (
+            <g>
+              {/* Cooling Service 5-Image Gallery Angles */}
+              <rect
+                x="22"
+                y="18"
+                width="216"
+                height="154"
+                rx="10"
+                fill="#0F172A"
+                stroke="#38BDF8"
+                strokeWidth="2.5"
+              />
+              {angleIndex === 1 && (
+                <g>
+                  {/* Angle 1: Dual Turbine Heatsink + Thermal Compound Renewal */}
+                  <circle
+                    cx="82"
+                    cy="78"
+                    r="32"
+                    fill="#1E293B"
+                    stroke="#38BDF8"
+                    strokeWidth="2.5"
+                  />
+                  <circle cx="82" cy="78" r="11" fill="#0F172A" />
+                  <circle
+                    cx="178"
+                    cy="78"
+                    r="32"
+                    fill="#1E293B"
+                    stroke="#8E4DEB"
+                    strokeWidth="2.5"
+                  />
+                  <circle cx="178" cy="78" r="11" fill="#0F172A" />
+                  <path
+                    d="M82 44 L178 44 M82 112 L178 112 M114 78 L146 78"
+                    stroke="#EF875D"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                  />
+                  <rect
+                    x="114"
+                    y="62"
+                    width="32"
+                    height="32"
+                    rx="4"
+                    fill="#38BDF8"
+                    stroke="#0F172A"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="130"
+                    y="148"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    THERMAL PASTE & HEATSINK RENEWAL
+                  </text>
+                </g>
+              )}
+              {angleIndex === 2 && (
+                <g>
+                  {/* Angle 2: High-Density Fin Stack & Fan Blade Dust Clearing */}
+                  <rect
+                    x="38"
+                    y="36"
+                    width="184"
+                    height="82"
+                    rx="6"
+                    fill="#1E293B"
+                    stroke="#38BDF8"
+                    strokeWidth="2"
+                  />
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <line
+                      key={i}
+                      x1={50 + i * 14.5}
+                      y1="44"
+                      x2={50 + i * 14.5}
+                      y2="110"
+                      stroke="#38BDF8"
+                      strokeWidth="3"
+                    />
+                  ))}
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    FIN STACK & AIRFLOW RESTORATION
+                  </text>
+                </g>
+              )}
+              {angleIndex === 3 && (
+                <g>
+                  {/* Angle 3: VRM & VRAM Thermal Pads Replacement */}
+                  <rect
+                    x="44"
+                    y="34"
+                    width="172"
+                    height="86"
+                    rx="6"
+                    fill="#111827"
+                    stroke="#8E4DEB"
+                    strokeWidth="2"
+                  />
+                  {[0, 1, 2, 3].map((p) => (
+                    <rect
+                      key={p}
+                      x={56 + p * 38}
+                      y="48"
+                      width="28"
+                      height="16"
+                      rx="2"
+                      fill="#38BDF8"
+                    />
+                  ))}
+                  <rect
+                    x="98"
+                    y="72"
+                    width="64"
+                    height="36"
+                    rx="4"
+                    fill="#EF875D"
+                  />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#EF875D"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    CPU/GPU DIE & VRM THERMAL PADS
+                  </text>
+                </g>
+              )}
+              {angleIndex === 4 && (
+                <g>
+                  {/* Angle 4: Pre vs Post Load Temperature Telemetry */}
+                  <rect
+                    x="42"
+                    y="40"
+                    width="78"
+                    height="76"
+                    rx="6"
+                    fill="#450A0A"
+                    stroke="#F43F5E"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="81"
+                    y="76"
+                    textAnchor="middle"
+                    fill="#FDA4AF"
+                    fontWeight="800"
+                    fontSize="16"
+                    fontFamily="monospace"
+                  >
+                    88°C
+                  </text>
+                  <text
+                    x="81"
+                    y="96"
+                    textAnchor="middle"
+                    fill="#FDA4AF"
+                    fontWeight="700"
+                    fontSize="8.5"
+                    fontFamily="monospace"
+                  >
+                    BEFORE
+                  </text>
+                  <rect
+                    x="140"
+                    y="40"
+                    width="78"
+                    height="76"
+                    rx="6"
+                    fill="#064E3B"
+                    stroke="#10B981"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="179"
+                    y="76"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="800"
+                    fontSize="16"
+                    fontFamily="monospace"
+                  >
+                    76°C
+                  </text>
+                  <text
+                    x="179"
+                    y="96"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="700"
+                    fontSize="8.5"
+                    fontFamily="monospace"
+                  >
+                    AFTER
+                  </text>
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    PRE & POST THERMAL VERIFICATION
+                  </text>
+                </g>
+              )}
+              {angleIndex === 5 && (
+                <g>
+                  {/* Angle 5: ESD-Safe Bench & Complete Thermal Report */}
+                  <rect
+                    x="48"
+                    y="38"
+                    width="164"
+                    height="78"
+                    rx="8"
+                    fill="#1E293B"
+                    stroke="#10B981"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M108 78 L124 92 L154 62"
+                    fill="none"
+                    stroke="#10B981"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                  />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    ESD-SAFE PROTOCOL · STABILITY CHECK
+                  </text>
+                </g>
+              )}
+            </g>
+          ) : key.includes('cameras') ? (
+            <g>
+              {/* Security Cameras Service 5-Image Gallery Angles */}
+              <rect
+                x="22"
+                y="18"
+                width="216"
+                height="154"
+                rx="10"
+                fill="#111318"
+                stroke="#8E4DEB"
+                strokeWidth="2.5"
+              />
+              {angleIndex === 1 && (
+                <g>
+                  {/* Angle 1: 4K IP Bullet & Dome Camera Pair */}
+                  <rect
+                    x="48"
+                    y="48"
+                    width="96"
+                    height="46"
+                    rx="10"
+                    fill="#F8FAFC"
+                    stroke="#8E4DEB"
+                    strokeWidth="2.5"
+                  />
+                  <circle cx="122" cy="71" r="14" fill="#111318" />
+                  <circle cx="122" cy="71" r="6" fill="#38BDF8" />
+                  <circle
+                    cx="188"
+                    cy="76"
+                    r="28"
+                    fill="#F8FAFC"
+                    stroke="#EF875D"
+                    strokeWidth="2.5"
+                  />
+                  <circle cx="188" cy="76" r="12" fill="#111318" />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    IP & HD CCTV SURVEILLANCE SYSTEMS
+                  </text>
+                </g>
+              )}
+              {angleIndex === 2 && (
+                <g>
+                  {/* Angle 2: Infrared Night Vision Array */}
+                  <circle
+                    cx="130"
+                    cy="78"
+                    r="42"
+                    fill="#1E293B"
+                    stroke="#EF875D"
+                    strokeWidth="2.5"
+                  />
+                  <circle cx="130" cy="78" r="18" fill="#0F172A" />
+                  {[0, 60, 120, 180, 240, 300].map((deg) => {
+                    const rad = (deg * Math.PI) / 180;
+                    return (
+                      <circle
+                        key={deg}
+                        cx={130 + Math.cos(rad) * 29}
+                        cy={78 + Math.sin(rad) * 29}
+                        r="4"
+                        fill="#F43F5E"
+                      />
+                    );
+                  })}
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#EF875D"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    IR NIGHT VISION & WEATHERPROOF IP67
+                  </text>
+                </g>
+              )}
+              {angleIndex === 3 && (
+                <g>
+                  {/* Angle 3: NVR/DVR Recorder & Surveillance HDD Storage */}
+                  <rect
+                    x="42"
+                    y="48"
+                    width="176"
+                    height="56"
+                    rx="6"
+                    fill="#1E293B"
+                    stroke="#8E4DEB"
+                    strokeWidth="2"
+                  />
+                  <circle cx="64" cy="76" r="6" fill="#10B981" />
+                  <circle cx="82" cy="76" r="6" fill="#38BDF8" />
+                  <rect
+                    x="110"
+                    y="62"
+                    width="90"
+                    height="28"
+                    rx="4"
+                    fill="#0F172A"
+                  />
+                  <text
+                    x="155"
+                    y="80"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontWeight="700"
+                    fontSize="9.5"
+                    fontFamily="monospace"
+                  >
+                    NVR 24/7 HDD
+                  </text>
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#D66C9D"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    NVR / DVR CONTINUOUS RECORDING
+                  </text>
+                </g>
+              )}
+              {angleIndex === 4 && (
+                <g>
+                  {/* Angle 4: PoE Network Switch & Structured Conduit Cabling */}
+                  <rect
+                    x="46"
+                    y="52"
+                    width="168"
+                    height="48"
+                    rx="6"
+                    fill="#1E293B"
+                    stroke="#38BDF8"
+                    strokeWidth="2"
+                  />
+                  {Array.from({ length: 8 }).map((_, p) => (
+                    <rect
+                      key={p}
+                      x={58 + p * 18}
+                      y="66"
+                      width="12"
+                      height="18"
+                      rx="2"
+                      fill="#0F172A"
+                      stroke="#EF875D"
+                      strokeWidth="1.2"
+                    />
+                  ))}
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    8-PORT PoE SWITCH & CLEAN CABLING
+                  </text>
+                </g>
+              )}
+              {angleIndex === 5 && (
+                <g>
+                  {/* Angle 5: Remote Mobile & Desktop Live View Grid */}
+                  <rect
+                    x="56"
+                    y="34"
+                    width="148"
+                    height="84"
+                    rx="8"
+                    fill="#1E293B"
+                    stroke="#10B981"
+                    strokeWidth="2"
+                  />
+                  <rect x="64" y="42" width="62" height="32" rx="3" fill="#0F172A" />
+                  <rect x="134" y="42" width="62" height="32" rx="3" fill="#0F172A" />
+                  <rect x="64" y="80" width="62" height="30" rx="3" fill="#0F172A" />
+                  <rect x="134" y="80" width="62" height="30" rx="3" fill="#0F172A" />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    LIVE MOBILE & DESKTOP MONITORING
+                  </text>
+                </g>
+              )}
+            </g>
+          ) : (
+            <g>
+              {/* Hardware Maintenance, Upgrades & Custom PC Assembly 5-Image Gallery Angles */}
+              <rect
+                x="22"
+                y="18"
+                width="216"
+                height="154"
+                rx="10"
+                fill="#111318"
+                stroke="#EF875D"
+                strokeWidth="2.5"
+              />
+              {angleIndex === 1 && (
+                <g>
+                  {/* Angle 1: Hardware Diagnostics Bench & Motherboard Inspection */}
+                  <rect
+                    x="44"
+                    y="36"
+                    width="172"
+                    height="82"
+                    rx="8"
+                    fill="#1E293B"
+                    stroke="#8E4DEB"
+                    strokeWidth="2"
+                  />
+                  <rect
+                    x="62"
+                    y="50"
+                    width="54"
+                    height="54"
+                    rx="6"
+                    fill="#0F172A"
+                    stroke="#EF875D"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="132"
+                    y1="56"
+                    x2="196"
+                    y2="56"
+                    stroke="#8E4DEB"
+                    strokeWidth="4"
+                  />
+                  <line
+                    x1="132"
+                    y1="74"
+                    x2="184"
+                    y2="74"
+                    stroke="#D66C9D"
+                    strokeWidth="4"
+                  />
+                  <line
+                    x1="132"
+                    y1="92"
+                    x2="192"
+                    y2="92"
+                    stroke="#10B981"
+                    strokeWidth="4"
+                  />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#EF875D"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    HARDWARE DIAGNOSTICS & REPAIR LAB
+                  </text>
+                </g>
+              )}
+              {angleIndex === 2 && (
+                <g>
+                  {/* Angle 2: DDR5 RAM & Gen4 NVMe Storage Upgrade */}
+                  <rect
+                    x="44"
+                    y="44"
+                    width="172"
+                    height="30"
+                    rx="4"
+                    fill="#1E293B"
+                    stroke="#8E4DEB"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="130"
+                    y="63"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontWeight="700"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    DDR5 DUAL-CHANNEL UPGRADE
+                  </text>
+                  <rect
+                    x="44"
+                    y="84"
+                    width="172"
+                    height="30"
+                    rx="4"
+                    fill="#1E293B"
+                    stroke="#EF875D"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="130"
+                    y="103"
+                    textAnchor="middle"
+                    fill="#EF875D"
+                    fontWeight="700"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    PCIe 4.0 NVMe SSD MIGRATION
+                  </text>
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#D66C9D"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    COMPATIBILITY-VERIFIED UPGRADES
+                  </text>
+                </g>
+              )}
+              {angleIndex === 3 && (
+                <g>
+                  {/* Angle 3: Custom PC Assembly & Clean Cable Management */}
+                  <rect
+                    x="56"
+                    y="32"
+                    width="148"
+                    height="88"
+                    rx="8"
+                    fill="#1E293B"
+                    stroke="#8E4DEB"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M84 44 L84 108 M114 44 L114 108 M144 44 L144 108 M174 44 L174 108"
+                    stroke="#8E4DEB"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    CUSTOM RIG ASSEMBLY & CABLE ROUTING
+                  </text>
+                </g>
+              )}
+              {angleIndex === 4 && (
+                <g>
+                  {/* Angle 4: BIOS Update, XMP/EXPO & Custom Fan Curve Tuning */}
+                  <rect
+                    x="44"
+                    y="36"
+                    width="172"
+                    height="82"
+                    rx="6"
+                    fill="#0F172A"
+                    stroke="#38BDF8"
+                    strokeWidth="2"
+                  />
+                  <polyline
+                    points="58,102 92,94 128,74 164,52 198,46"
+                    fill="none"
+                    stroke="#38BDF8"
+                    strokeWidth="3.5"
+                  />
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    BIOS UPDATE · EXPO & FAN CURVES
+                  </text>
+                </g>
+              )}
+              {angleIndex === 5 && (
+                <g>
+                  {/* Angle 5: Full System Stress Test & Quality Handover */}
+                  <rect
+                    x="48"
+                    y="38"
+                    width="164"
+                    height="78"
+                    rx="8"
+                    fill="#1E293B"
+                    stroke="#10B981"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="130"
+                    y="82"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="800"
+                    fontSize="13"
+                    fontFamily="monospace"
+                  >
+                    100% STRESS-TESTED
+                  </text>
+                  <text
+                    x="130"
+                    y="146"
+                    textAnchor="middle"
+                    fill="#6EE7B7"
+                    fontWeight="800"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    VERIFIED STABILITY BEFORE HANDOVER
+                  </text>
+                </g>
+              )}
             </g>
           )}
         </svg>

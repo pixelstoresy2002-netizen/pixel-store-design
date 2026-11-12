@@ -56,22 +56,29 @@ function SubcategoryContent() {
 
   const handleSubcategoryFilterUpdate = (next: Partial<FilterState>) => {
     updateFilters(next);
-    if (next.categoryId !== undefined) {
-      if (next.categoryId === 'ALL') {
-        router.push('/catalog');
-      } else {
-        router.push(`/category/${encodeURIComponent(next.categoryId)}`);
-      }
-    } else if (next.subcategoryId !== undefined) {
+    const targetCategoryId = next.categoryId ?? effectiveFilters.categoryId;
+
+    if (next.categoryId === 'ALL') {
+      router.push('/catalog');
+      return;
+    }
+
+    if (next.subcategoryId !== undefined) {
       if (next.subcategoryId === 'ALL') {
+        router.push(`/category/${encodeURIComponent(targetCategoryId)}`);
+      } else if (
+        next.subcategoryId !== routeSubcategoryId ||
+        targetCategoryId !== routeCategoryId
+      ) {
         router.push(
-          `/category/${encodeURIComponent(effectiveFilters.categoryId)}`
-        );
-      } else if (next.subcategoryId !== routeSubcategoryId) {
-        router.push(
-          `/category/${encodeURIComponent(effectiveFilters.categoryId)}/${encodeURIComponent(next.subcategoryId)}`
+          `/category/${encodeURIComponent(targetCategoryId)}/${encodeURIComponent(next.subcategoryId)}`
         );
       }
+      return;
+    }
+
+    if (next.categoryId !== undefined && next.categoryId !== routeCategoryId) {
+      router.push(`/category/${encodeURIComponent(next.categoryId)}`);
     }
   };
 

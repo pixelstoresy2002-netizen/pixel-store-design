@@ -22,11 +22,17 @@ import {
   Brand,
   Category,
   DesignThemeId,
+  HeroSlide,
   Language,
   Offer,
   Product,
+  PromoBanner,
   StoreSettings,
 } from '../../types/store';
+import {
+  INITIAL_HERO_SLIDES,
+  INITIAL_PROMO_BANNERS,
+} from '../../data/mockStoreData';
 import {
   formatSyp,
   formatUsd,
@@ -53,6 +59,8 @@ interface HomePageProps {
   categories: Category[];
   brands: Brand[];
   offers: Offer[];
+  heroSlides?: HeroSlide[];
+  promoBanners?: PromoBanner[];
   settings: StoreSettings;
   nowMs: number;
   onNavigate: (
@@ -71,6 +79,8 @@ export const HomePage: React.FC<HomePageProps> = ({
   products,
   brands,
   offers,
+  heroSlides: propHeroSlides,
+  promoBanners: propPromoBanners,
   settings,
   nowMs,
   onNavigate,
@@ -88,123 +98,31 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const DirectionalArrow = lang === 'ar' ? ArrowLeft : ArrowRight;
 
-  const heroSlides = [
-    {
-      id: 'slide-1',
-      kicker: {
-        ar: 'تجميعات وكروت شاشة الجيل الجديد',
-        en: 'NEXT-GEN GPUS & CUSTOM RIGS',
-      },
-      title: {
-        ar: 'قوة الأداء الاحترافي للألعاب والرندر في مكان واحد',
-        en: 'Pro-Grade RTX 40-Series Rigs & Gaming Laptops',
-      },
-      subtitle: {
-        ar: 'تجميعات مختبرة بدقة، لابتوبات ROG و Lenovo، وقطع أصلية بتسعير واضح بالدولار والليرة السورية.',
-        en: 'Stress-tested custom PC builds, ROG & Lenovo laptops, and authentic components with transparent USD & SYP pricing.',
-      },
-      ctaLabel: {
-        ar: 'تصفح كروت الشاشة والقطع',
-        en: 'Explore PC Components',
-      },
-      visualKey: 'comp-gpu-front',
-      targetView: 'category' as StorefrontView,
-      targetCategory: 'pc-components',
-      accent: '#8E4DEB',
-    },
-    {
-      id: 'slide-2',
-      kicker: {
-        ar: 'قسم اللابتوبات الجديدة والمستعملة النظيفة',
-        en: 'NEW & CLEAN TESTED USED LAPTOPS',
-      },
-      title: {
-        ar: 'اختر لابتوبك للألعاب أو الهندسة أو الدراسة الجامعية',
-        en: 'Laptops Curated for Gaming, Engineering & Study',
-      },
-      subtitle: {
-        ar: 'تشكيلة واسعة من اللابتوبات الجديدة بالكرتونة والمستعملة النظيفة المفحوصة بأسعار مدروسة.',
-        en: 'Compare factory-sealed new laptops and clean pre-owned machines inspected by our hardware specialists.',
-      },
-      ctaLabel: {
-        ar: 'استعرض قسم اللابتوبات',
-        en: 'Browse All Laptops',
-      },
-      visualKey: 'laptop-rog-front',
-      targetView: 'category' as StorefrontView,
-      targetCategory: 'laptops',
-      accent: '#D66C9D',
-    },
-    {
-      id: 'slide-3',
-      kicker: {
-        ar: 'ملحقات الاحتراف والعمل المكتبي',
-        en: 'GAMING & ERGONOMIC OFFICE PERIPHERALS',
-      },
-      title: {
-        ar: 'لوحات مفاتيح، ماوسات فائقة الخفة، وسماعات IEM',
-        en: 'Mechanical Keyboards, 49g Esports Mice & Hi-Fi IEMs',
-      },
-      subtitle: {
-        ar: 'فرز ذكي حسب الاستخدام: اختر عتاد الألعاب التنافسية (Gaming) أو راحة العمل المكتبي الهادئ (Office).',
-        en: 'Shop by use case: tournament-ready optical switches or whisper-quiet ergonomic office peripherals.',
-      },
-      ctaLabel: {
-        ar: 'تصفح الإكسسوارات والملحقات',
-        en: 'Shop Peripherals',
-      },
-      visualKey: 'kb-huntsman-front',
-      targetView: 'category' as StorefrontView,
-      targetCategory: 'accessories',
-      accent: '#EF875D',
-    },
-    {
-      id: 'slide-4',
-      kicker: {
-        ar: 'مختبر التجميع الاحترافي في بيكسل ستور',
-        en: 'PIXEL STORE CUSTOM PC BUILD LAB',
-      },
-      title: {
-        ar: 'تجميعات PC جاهزة للألعاب التنافسية والمونتاج الهندسي',
-        en: 'Ready-to-Run Gaming & Workstation PC Builds',
-      },
-      subtitle: {
-        ar: 'تنظيم كابلات احترافي، ضبط BIOS وترددات الرام، مع اختبار ضغط حراري شامل قبل التسليم.',
-        en: 'Precision cable management, XMP/EXPO tuning, and full thermal stress testing on every custom build.',
-      },
-      ctaLabel: {
-        ar: 'استعرض تجميعات PC',
-        en: 'Explore PC Builds',
-      },
-      visualKey: 'build-nebula-front',
-      targetView: 'category' as StorefrontView,
-      targetCategory: 'pc-builds',
-      accent: '#8E4DEB',
-    },
-    {
-      id: 'slide-5',
-      kicker: {
-        ar: 'الصوتيات الاحترافية وحلول التبريد المتقدمة',
-        en: 'PRO AUDIO & THERMAL COOLING SOLUTIONS',
-      },
-      title: {
-        ar: 'سماعات ألعاب محيطية وخدمات صيانة وتبريد احترافية',
-        en: 'Studio IEMs, Gaming Headsets & Thermal Servicing',
-      },
-      subtitle: {
-        ar: 'تجربة صوتية دقيقة للألعاب التنافسية، مع قسم متخصص لحلول التبريد وخفض حرارة اللابتوبات.',
-        en: 'Pinpoint positional audio gear alongside our specialized laptop & GPU thermal servicing lab.',
-      },
-      ctaLabel: {
-        ar: 'تصفح الصوتيات والسماعات',
-        en: 'Explore Audio & Headsets',
-      },
-      visualKey: 'audio-iem-front',
-      targetView: 'category' as StorefrontView,
-      targetCategory: 'audio',
-      accent: '#D66C9D',
-    },
-  ];
+  const activeHeroSlides = (
+    propHeroSlides && propHeroSlides.length > 0
+      ? propHeroSlides
+      : INITIAL_HERO_SLIDES
+  )
+    .filter((s) => s.isActive !== false)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const heroSlides =
+    activeHeroSlides.length > 0 ? activeHeroSlides : INITIAL_HERO_SLIDES;
+
+  const activePromoBanners = (
+    propPromoBanners && propPromoBanners.length > 0
+      ? propPromoBanners
+      : INITIAL_PROMO_BANNERS
+  )
+    .filter((b) => b.isActive !== false)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .slice(0, 2);
+
+  const sideBanners =
+    activePromoBanners.length > 0
+      ? activePromoBanners
+      : INITIAL_PROMO_BANNERS.slice(0, 2);
+  // Hero slides and side promo banners are driven by StoreContext (INITIAL_HERO_SLIDES / INITIAL_PROMO_BANNERS)
 
   // Respect prefers-reduced-motion media query
   useEffect(() => {
@@ -490,7 +408,11 @@ export const HomePage: React.FC<HomePageProps> = ({
                         <button
                           type="button"
                           onClick={() =>
-                            onNavigate(slide.targetView, slide.targetCategory)
+                            onNavigate(
+                              slide.targetView,
+                              slide.targetCategory,
+                              slide.targetSubcategory
+                            )
                           }
                           className={`inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold transition-colors ${
                             themeId === 'contrast'
@@ -712,99 +634,87 @@ export const HomePage: React.FC<HomePageProps> = ({
           ) : (
             /* Theme 1 (Original Hybrid) & Theme 2 (Pixel Contrast): Two Stacked Side Promotional Banners (4 Columns) */
             <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-              {/* Side Promo 1: Custom PC Builds */}
-              <div
-                className={`relative bg-[#161822] text-white p-5 border flex items-center justify-between gap-4 overflow-hidden ${
-                  themeId === 'contrast'
-                    ? 'rounded-none border-[#D66C9D]/50'
-                    : 'rounded-lg border-slate-800'
-                }`}
-              >
-                <div className="space-y-1.5 z-10 flex-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#D66C9D]">
-                    {lang === 'ar' ? 'قسم التجميع الاحترافي' : 'PIXEL BUILD STUDIO'}
-                  </span>
-                  <h2 className="text-base font-bold leading-snug text-white">
-                    {lang === 'ar'
-                      ? 'تجميعات PC احترافية جاهزة ومختبرة'
-                      : 'Custom Gaming & Creator PC Builds'}
-                  </h2>
-                  <p className="text-xs text-slate-300 line-clamp-2">
-                    {lang === 'ar'
-                      ? 'تنظيم كابلات احترافي + اختبار ضغط حراري شامل'
-                      : 'Clean cable routing, BIOS tuning & thermal stress test'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('category', 'pc-builds')}
-                    className="inline-flex items-center gap-1.5 pt-1 text-xs font-semibold text-[#EF875D] hover:text-white transition-colors"
-                  >
-                    <span>
-                      {lang === 'ar' ? 'استعرض التجميعات' : 'Explore Builds'}
-                    </span>
-                    <DirectionalArrow className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="w-28 h-24 rounded overflow-hidden shrink-0 border border-white/10 bg-[#111318]">
-                  <ProductVisual
-                    visualKey="build-nebula-front"
-                    alt="Custom PC Build"
-                  />
-                </div>
-              </div>
-
-              {/* Side Promo 2: Keyboards & Mice Use-Case Discovery */}
-              <div
-                className={`relative p-5 border flex items-center justify-between gap-4 overflow-hidden transition-colors ${
-                  themeId === 'contrast'
-                    ? 'rounded-none bg-[#111318] text-white border-white/15 hover:border-[#8E4DEB]'
-                    : 'rounded-lg bg-white text-[#111318] border-slate-200/90 hover:border-[#8E4DEB]/60'
-                }`}
-              >
-                <div className="space-y-1.5 z-10 flex-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8E4DEB]">
-                    {lang === 'ar' ? 'فرز ذكي حسب الاستخدام' : 'USE-CASE SELECTOR'}
-                  </span>
-                  <h2
-                    className={`text-base font-bold leading-snug ${
-                      themeId === 'contrast' ? 'text-white' : 'text-[#111318]'
-                    }`}
-                  >
-                    {lang === 'ar'
-                      ? 'كيبوردات وماوسات: ألعاب أم عمل مكتبي؟'
-                      : 'Keyboards & Mice: Gaming vs. Office'}
-                  </h2>
-                  <p
-                    className={`text-xs line-clamp-2 ${
-                      themeId === 'contrast' ? 'text-slate-300' : 'text-slate-600'
-                    }`}
-                  >
-                    {lang === 'ar'
-                      ? 'تصفح حسب طبيعة عملك بضغطة واحدة'
-                      : 'Filter effortlessly between esports speed and quiet office comfort'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onNavigate('category', 'accessories', 'keyboards')
+              {sideBanners.map((banner, idx) => {
+                const isFirstStyle =
+                  banner.themeVariant === 'dark' || idx === 0;
+                return (
+                  <div
+                    key={banner.id}
+                    data-testid={`side-promo-banner-${idx + 1}`}
+                    className={
+                      isFirstStyle
+                        ? `relative bg-[#161822] text-white p-5 border flex items-center justify-between gap-4 overflow-hidden ${
+                            themeId === 'contrast'
+                              ? 'rounded-none border-[#D66C9D]/50'
+                              : 'rounded-lg border-slate-800'
+                          }`
+                        : `relative p-5 border flex items-center justify-between gap-4 overflow-hidden transition-colors ${
+                            themeId === 'contrast'
+                              ? 'rounded-none bg-[#111318] text-white border-white/15 hover:border-[#8E4DEB]'
+                              : 'rounded-lg bg-white text-[#111318] border-slate-200/90 hover:border-[#8E4DEB]/60'
+                          }`
                     }
-                    className="inline-flex items-center gap-1.5 pt-1 text-xs font-semibold text-[#8E4DEB] hover:underline transition-colors"
                   >
-                    <span>
-                      {lang === 'ar'
-                        ? 'جرب الاختيار حسب الاستخدام'
-                        : 'Try Use-Case View'}
-                    </span>
-                    <DirectionalArrow className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="w-28 h-24 rounded overflow-hidden shrink-0 border border-slate-200/60 bg-[#F8F7FA]">
-                  <ProductVisual
-                    visualKey="kb-mxkeys-front"
-                    alt="Keyboards & Mice"
-                  />
-                </div>
-              </div>
+                    <div className="space-y-1.5 z-10 flex-1">
+                      <span
+                        className={`text-[11px] font-semibold uppercase tracking-wider ${
+                          isFirstStyle ? 'text-[#D66C9D]' : 'text-[#8E4DEB]'
+                        }`}
+                      >
+                        {banner.kicker[lang]}
+                      </span>
+                      <h2
+                        className={`text-base font-bold leading-snug ${
+                          isFirstStyle || themeId === 'contrast'
+                            ? 'text-white'
+                            : 'text-[#111318]'
+                        }`}
+                      >
+                        {banner.title[lang]}
+                      </h2>
+                      <p
+                        className={`text-xs line-clamp-2 ${
+                          isFirstStyle || themeId === 'contrast'
+                            ? 'text-slate-300'
+                            : 'text-slate-600'
+                        }`}
+                      >
+                        {banner.subtitle[lang]}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onNavigate(
+                            banner.targetView,
+                            banner.targetCategory,
+                            banner.targetSubcategory
+                          )
+                        }
+                        className={`inline-flex items-center gap-1.5 pt-1 text-xs font-semibold transition-colors ${
+                          isFirstStyle
+                            ? 'text-[#EF875D] hover:text-white'
+                            : 'text-[#8E4DEB] hover:underline'
+                        }`}
+                      >
+                        <span>{banner.ctaLabel[lang]}</span>
+                        <DirectionalArrow className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div
+                      className={`w-28 h-24 rounded overflow-hidden shrink-0 border ${
+                        isFirstStyle
+                          ? 'border-white/10 bg-[#111318]'
+                          : 'border-slate-200/60 bg-[#F8F7FA]'
+                      }`}
+                    >
+                      <ProductVisual
+                        visualKey={banner.visualKey}
+                        alt={banner.title[lang]}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -8,5 +8,9 @@ coverage/
 *.log
 *.tsbuildinfo
 .playwright-cli/
+*.zip
+.aistudio/
+pixel-store-post-fix-review/
+pixel-store-visual-review/
 .env*
 !.env.example

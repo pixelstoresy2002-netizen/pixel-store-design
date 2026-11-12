@@ -42,32 +42,38 @@ function CategoryContent() {
     }));
   }, [routeCategoryId, routeUseCase, setFilters]);
 
-  // Ensure initial render before useEffect uses the URL categoryId directly
-  const effectiveFilters: FilterState =
-    filters.categoryId === routeCategoryId
-      ? filters
-      : {
-          ...filters,
-          categoryId: routeCategoryId,
-          subcategoryId: 'ALL',
-          useCaseId: routeUseCase !== 'ALL' ? routeUseCase : filters.useCaseId,
-        };
+  // Ensure initial render before useEffect uses the URL categoryId and clears subcategoryId
+  const effectiveFilters: FilterState = {
+    ...filters,
+    categoryId: routeCategoryId,
+    subcategoryId: 'ALL',
+    useCaseId: routeUseCase !== 'ALL' ? routeUseCase : filters.useCaseId,
+  };
 
   const handleCategoryFilterUpdate = (next: Partial<FilterState>) => {
     updateFilters(next);
-    if (next.categoryId !== undefined) {
-      if (next.categoryId === 'ALL') {
-        router.push('/catalog');
-      } else if (next.categoryId !== routeCategoryId) {
-        router.push(`/category/${encodeURIComponent(next.categoryId)}`);
+    const targetCategoryId = next.categoryId ?? effectiveFilters.categoryId;
+
+    if (next.categoryId === 'ALL') {
+      router.push('/catalog');
+      return;
+    }
+
+    if (next.subcategoryId !== undefined) {
+      if (next.subcategoryId === 'ALL') {
+        if (targetCategoryId !== routeCategoryId) {
+          router.push(`/category/${encodeURIComponent(targetCategoryId)}`);
+        }
+      } else {
+        router.push(
+          `/category/${encodeURIComponent(targetCategoryId)}/${encodeURIComponent(next.subcategoryId)}`
+        );
       }
-    } else if (
-      next.subcategoryId !== undefined &&
-      next.subcategoryId !== 'ALL'
-    ) {
-      router.push(
-        `/category/${encodeURIComponent(effectiveFilters.categoryId)}/${encodeURIComponent(next.subcategoryId)}`
-      );
+      return;
+    }
+
+    if (next.categoryId !== undefined && next.categoryId !== routeCategoryId) {
+      router.push(`/category/${encodeURIComponent(next.categoryId)}`);
     }
   };
 
