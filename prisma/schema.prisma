@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StockStatus {
+  IN_STOCK
+  OUT_OF_STOCK
+  ON_REQUEST
+}
+
+enum ProductCondition {
+  NEW
+  USED
+}
+
+enum CustomerRequestStatus {
+  NEW
+  CONTACTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum HomepageBannerKind {
+  HERO
+  PROMO
+}
+
+enum AnalyticsEventType {
+  PAGE_VIEW
+  PRODUCT_VIEW
+  CONTACT_CLICK
+  REQUEST_INTENT
+  REQUEST_SUBMITTED
+}
+
+enum ContactChannel {
+  WHATSAPP
+  PHONE
+  FACEBOOK
+  INSTAGRAM
+  OTHER
+}
+
+enum ContactPlacement {
+  PRODUCT_PAGE
+  HEADER
+  FOOTER
+  FLOATING_BUTTON
+  REQUEST_DIALOG
+  HOME_CTA
+}
+
+model Category {
+  id            String   @id @default(uuid()) @db.Uuid
+  parentId      String?  @db.Uuid
+  nameAr        String
+  nameEn        String
+  slug          String   @unique
+  descriptionAr String?
+  descriptionEn String?
+  imageUrl      String?
+  imagePublicId String?  @unique
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  parent          Category?        @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Category[]       @relation("CategoryHierarchy")
+  products        Product[]
+  useCaseTags     UseCaseTag[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@index([parentId, isActive, sortOrder])
+  @@index([isActive, sortOrder])
+}
+
+model Brand {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  normalizedName String   @unique
+  slug           String   @unique
+  descriptionAr  String?
+  descriptionEn  String?
+  logoUrl        String?
+  logoPublicId   String?  @unique
+  websiteUrl     String?
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products Product[]
+
+  @@index([isActive, sortOrder])
+}
+
+model UseCaseTag {
+  id            String   @id @default(uuid()) @db.Uuid
+  slug          String   @unique
+  nameAr        String
+  nameEn        String
+  descriptionAr String?
+  descriptionEn String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  products   Product[]
+  categories Category[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Product {
+  id                 String           @id @default(uuid()) @db.Uuid
+  slug               String           @unique
+  sku                String           @unique
+  nameAr             String
+  nameEn             String
+  brandId            String           @db.Uuid
+  categoryId         String           @db.Uuid
+  descriptionAr      String
+  descriptionEn      String
+  shortDescriptionAr String?
+  shortDescriptionEn String?
+  priceUsdCents      Int
+  stockStatus        StockStatus
+  condition          ProductCondition @default(NEW)
+  isBestSeller       Boolean          @default(false)
+  isNewArrival       Boolean          @default(false)
+  isFeatured         Boolean          @default(false)
+  isActive           Boolean          @default(true)
+  sortOrder          Int              @default(0)
+  extraSpecs         Json?            @db.JsonB
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  category         Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand            Brand             @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  laptopSpecs      LaptopSpecs?
+  images           ProductImage[]
+  useCaseTags      UseCaseTag[]
+  offers           Offer[]
+  customerRequests CustomerRequest[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@index([categoryId, isActive, priceUsdCents])
+  @@index([brandId, isActive])
+  @@index([isActive, isFeatured, sortOrder])
+  @@index([isActive, isBestSeller, sortOrder])
+  @@index([isActive, isNewArrival, sortOrder])
+  @@index([isActive, priceUsdCents])
+  @@index([isActive, stockStatus])
+}
+
+model LaptopSpecs {
+  productId String  @id @db.Uuid
+  processor String?
+  memory    String?
+  storage   String?
+  display   String?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  publicId  String   @unique
+  url       String
+  altAr     String?
+  altEn     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, sortOrder])
+}
+
+/// Offer activity is derived from isEnabled, startsAt, endsAt, and server time.
+/// Server Actions must reject invalid windows and overlapping enabled offers.
+model Offer {
+  id            String   @id @default(uuid()) @db.Uuid
+  productId     String   @db.Uuid
+  titleAr       String
+  titleEn       String
+  descriptionAr String?
+  descriptionEn String?
+  priceUsdCents Int
+  startsAt      DateTime
+  endsAt        DateTime
+  isEnabled     Boolean  @default(false)
+  isExclusive   Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, isEnabled, startsAt, endsAt])
+  @@index([isEnabled, sortOrder])
+}
+
+model HomepageBanner {
+  id                 String             @id @default(uuid()) @db.Uuid
+  kind               HomepageBannerKind
+  titleAr            String
+  titleEn            String
+  subtitleAr         String?
+  subtitleEn         String?
+  imageUrl           String
+  imagePublicId      String             @unique
+  destinationUrl     String?
+  destinationLabelAr String?
+  destinationLabelEn String?
+  isActive           Boolean            @default(true)
+  sortOrder          Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([kind, isActive, sortOrder])
+}
+
+/// highlights and workflowSteps are validated as bilingual structured JSON
+/// before persistence. Benchmark or performance claims are intentionally absent.
+model StoreService {
+  id                 String   @id @default(uuid()) @db.Uuid
+  slug               String   @unique
+  nameAr             String
+  nameEn             String
+  shortDescriptionAr String?
+  shortDescriptionEn String?
+  descriptionAr      String
+  descriptionEn      String
+  highlights         Json?    @db.JsonB
+  workflowSteps      Json?    @db.JsonB
+  isFeatured         Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  images ServiceImage[]
+
+  @@index([isActive, isFeatured, sortOrder])
+}
+
+model ServiceImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  serviceId String   @db.Uuid
+  publicId  String   @unique
+  url       String
+  altAr     String?
+  altEn     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  service StoreService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, sortOrder])
+}
+
+model CustomerRequest {
+  id                    String                @id @default(uuid()) @db.Uuid
+  customerName          String
+  customerPhone         String
+  note                  String?
+  adminNotes            String?
+  productId             String?               @db.Uuid
+  productNameArSnapshot String
+  productNameEnSnapshot String
+  productSkuSnapshot    String
+  usdPriceCentsSnapshot Int
+  usdRateSnapshot       Int
+  sypPriceSnapshot      BigInt
+  status                CustomerRequestStatus @default(NEW)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  contactedAt           DateTime?
+  inProgressAt          DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([customerPhone, createdAt])
+  @@index([productId, createdAt])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id         String             @id @default(uuid()) @db.Uuid
+  eventType  AnalyticsEventType
+  visitorId  String?
+  sessionId  String?
+  productId  String?            @db.Uuid
+  categoryId String?            @db.Uuid
+  channel    ContactChannel?
+  placement  ContactPlacement?
+  locale     String?
+  metadata   Json?              @db.JsonB
+  createdAt  DateTime           @default(now())
+
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([productId, createdAt])
+  @@index([categoryId, createdAt])
+  @@index([createdAt])
+}
+
+model SiteSettings {
+  id                 String   @id @default(uuid()) @db.Uuid
+  storeNameAr        String
+  storeNameEn        String
+  storeDescriptionAr String?
+  storeDescriptionEn String?
+  usdToSypRate       Int
+  phone              String?
+  whatsapp           String?
+  email              String?
+  addressAr          String?
+  addressEn          String?
+  facebook           String?
+  instagram          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([issuer, accountId], map: "account_issuer_accountId_uidx")
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

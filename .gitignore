@@ -13,4 +13,7 @@ coverage/
 pixel-store-post-fix-review/
 pixel-store-visual-review/
 .env*
+
+# Prisma Client is generated locally from prisma/schema.prisma.
+/src/generated/prisma/
 !.env.example
