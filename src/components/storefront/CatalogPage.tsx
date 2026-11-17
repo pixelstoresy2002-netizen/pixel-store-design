@@ -923,7 +923,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                                 alt={sub.name[lang]}
                               />
                             </span>
-                            <span className="text-[11px] font-bold truncate">
+                            <span className="text-[11px] font-bold ">
                               {shortName}
                             </span>
                           </span>
