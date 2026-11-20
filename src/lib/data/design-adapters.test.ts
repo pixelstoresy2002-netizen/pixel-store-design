@@ -10,6 +10,8 @@ import {
   mapStoreService,
   serializeBigIntForClient,
 } from './design-adapters.ts';
+import { mapCustomerRequestForAdmin } from './admin-contract.ts';
+import { convertUsdCentsToSyp } from './money.ts';
 
 const date = new Date('2026-11-17T12:00:00.000Z');
 
@@ -43,7 +45,7 @@ test('preserves an empty product image state and category slugs for UI filtering
     useCaseTags: [], laptopSpecs: null, images: [],
   });
   const category = mapCategory({
-    slug: 'audio', nameAr: 'صوت', nameEn: 'Audio', descriptionAr: null, descriptionEn: null,
+    slug: 'audio', nameAr: 'صوت', nameEn: 'Audio', descriptionAr: null, descriptionEn: null, imageUrl: '/assets/categories/audio.svg',
     sortOrder: 10, isActive: true, parent: null, useCaseTags: [],
   });
 
@@ -51,6 +53,7 @@ test('preserves an empty product image state and category slugs for UI filtering
   assert.deepEqual(product.galleryImages, []);
   assert.equal(category.id, 'audio');
   assert.equal(category.parentId, undefined);
+  assert.equal(category.visualKey, '/assets/categories/audio.svg');
 });
 
 test('derives offer state from server time and maps only active offers as UI-active', () => {
@@ -81,4 +84,25 @@ test('limits ordered service galleries and serializes BigInt at the client bound
   assert.deepEqual(service.galleryImages, ['/1.jpg', '/2.jpg', '/3.jpg', '/4.jpg', '/5.jpg']);
   assert.equal(service.primaryImage, '/1.jpg');
   assert.deepEqual(serialized, { requestTotal: '42', nested: ['7'] });
+});
+
+test('caps product images and preserves integer-safe customer request snapshots', () => {
+  const product = mapProduct({
+    id: 'id', slug: 'slug', sku: 'sku', nameAr: 'أ', nameEn: 'A', descriptionAr: 'ب', descriptionEn: 'B',
+    priceUsdCents: 101, stockStatus: 'IN_STOCK', condition: 'NEW', isBestSeller: false,
+    isNewArrival: false, isFeatured: false, isActive: true, createdAt: date, updatedAt: date,
+    extraSpecs: null, category: { slug: 'audio', parent: null }, brand: { slug: 'brand' },
+    useCaseTags: [], laptopSpecs: null, images: [6, 1, 5, 3, 2, 4].map((sortOrder) => ({ url: `/${sortOrder}.jpg`, sortOrder })),
+  });
+  const request = mapCustomerRequestForAdmin({
+    id: 'request', customerName: 'Customer', customerPhone: '+963000000000', note: null, adminNotes: null,
+    productId: 'id', productNameArSnapshot: 'أ', productNameEnSnapshot: 'A', productSkuSnapshot: 'sku',
+    usdPriceCentsSnapshot: 101, usdRateSnapshot: 7_500, sypPriceSnapshot: 7_575n,
+    status: 'IN_PROGRESS', createdAt: date, updatedAt: date,
+  });
+
+  assert.deepEqual(product.galleryImages, ['/1.jpg', '/2.jpg', '/3.jpg', '/4.jpg', '/5.jpg']);
+  assert.equal(convertUsdCentsToSyp(101, 7_500), 7_575n);
+  assert.equal(request.sypPriceSnapshot, '7575');
+  assert.equal(request.status, 'IN_PROGRESS');
 });

@@ -16,7 +16,7 @@ const productInclude = {
   brand: true,
   useCaseTags: { orderBy: { sortOrder: 'asc' }, take: 20 },
   laptopSpecs: true,
-  images: { orderBy: { sortOrder: 'asc' }, take: 20 },
+  images: { orderBy: { sortOrder: 'asc' }, take: 5 },
 } satisfies Prisma.ProductInclude;
 
 function productOrderBy(

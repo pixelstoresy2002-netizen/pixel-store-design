@@ -11,6 +11,9 @@ import type {
   StoreSettings,
   UseCaseTag,
 } from '@/types/store';
+import { usdCentsToDisplay } from './money.ts';
+
+export { usdCentsToDisplay } from './money.ts';
 
 export type ProductImageRecord = { url: string; sortOrder: number };
 export type ServiceImageRecord = { url: string; sortOrder: number };
@@ -46,6 +49,7 @@ export interface CategoryRecord {
   nameEn: string;
   descriptionAr: string | null;
   descriptionEn: string | null;
+  imageUrl: string | null;
   sortOrder: number;
   isActive: boolean;
   parent: { slug: string } | null;
@@ -188,13 +192,8 @@ function mapWorkflowTitles(value: unknown): BilingualText[] {
   });
 }
 
-/** Database cents stay authoritative; this converts only for the existing display contract. */
-export function usdCentsToDisplay(cents: number) {
-  return cents / 100;
-}
-
 export function mapProduct(record: ProductRecord): Product {
-  const galleryImages = orderedUrls(record.images);
+  const galleryImages = orderedUrls(record.images, 5);
   const primaryImage = galleryImages[0] ?? '';
 
   return {
@@ -235,7 +234,8 @@ export function mapCategory(record: CategoryRecord): Category {
     iconKey: '',
     ...(record.parent ? { parentId: record.parent.slug } : {}),
     useCaseIds: record.useCaseTags.map((tag) => tag.slug),
-    visualKey: '',
+    // Existing visual consumers also accept a real local or remote image URL.
+    visualKey: record.imageUrl ?? '',
     sortOrder: record.sortOrder,
     isActive: record.isActive,
   };

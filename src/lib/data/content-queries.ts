@@ -53,7 +53,7 @@ export async function getOffers(input: OfferListQueryInput = {}, now = new Date(
   const [items, total] = await prisma.$transaction([
     prisma.offer.findMany({
       where,
-      include: { product: { include: { images: { orderBy: { sortOrder: 'asc' } } } } },
+      include: { product: { include: { images: { orderBy: { sortOrder: 'asc' }, take: 5 } } } },
       orderBy: [{ startsAt: query.order }, { id: 'asc' }],
       skip: query.skip,
       take: query.limit,
