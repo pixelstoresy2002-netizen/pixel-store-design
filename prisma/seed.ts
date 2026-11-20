@@ -47,14 +47,17 @@ async function seedApprovedPrototypeData() {
   const validation = validateApprovedSeedData();
 
   const result = await prisma.$transaction(async (transaction) => {
-    const protectedBefore = await Promise.all([
-      transaction.user.count(),
-      transaction.session.count(),
-      transaction.account.count(),
-      transaction.verification.count(),
-      transaction.customerRequest.count(),
-      transaction.analyticsEvent.count(),
-    ]);
+    // Keep statements sequential inside this interactive Prisma 7 transaction.
+    // The pg adapter uses one transaction connection and concurrent Promise.all
+    // work can exhaust its transaction timeout before the seed begins writing.
+    const protectedBefore = [
+      await transaction.user.count(),
+      await transaction.session.count(),
+      await transaction.account.count(),
+      await transaction.verification.count(),
+      await transaction.customerRequest.count(),
+      await transaction.analyticsEvent.count(),
+    ];
 
     const tagIds = new Map<string, string>();
     let createdTags = 0;
@@ -84,10 +87,8 @@ async function seedApprovedPrototypeData() {
     let createdBrands = 0;
     for (const [index, brand] of prototypeCatalog.brands.entries()) {
       const normalizedName = normalizeBrandName(brand.name);
-      const [byNormalizedName, bySlug] = await Promise.all([
-        transaction.brand.findUnique({ where: { normalizedName }, select: { id: true, slug: true } }),
-        transaction.brand.findUnique({ where: { slug: brand.id }, select: { id: true, normalizedName: true } }),
-      ]);
+      const byNormalizedName = await transaction.brand.findUnique({ where: { normalizedName }, select: { id: true, slug: true } });
+      const bySlug = await transaction.brand.findUnique({ where: { slug: brand.id }, select: { id: true, normalizedName: true } });
       if (byNormalizedName && bySlug && byNormalizedName.id !== bySlug.id) fail(`brand identity conflict: ${brand.id}`);
       if (byNormalizedName) {
         brandIds.set(brand.id, byNormalizedName.id);
@@ -151,10 +152,8 @@ async function seedApprovedPrototypeData() {
     let createdLaptopSpecs = 0;
     for (const [index, product] of approvedProducts.entries()) {
       const slug = productSlug(product);
-      const [bySlug, bySku] = await Promise.all([
-        transaction.product.findUnique({ where: { slug }, select: { id: true, sku: true } }),
-        transaction.product.findUnique({ where: { sku: product.sku }, select: { id: true, slug: true } }),
-      ]);
+      const bySlug = await transaction.product.findUnique({ where: { slug }, select: { id: true, sku: true } });
+      const bySku = await transaction.product.findUnique({ where: { sku: product.sku }, select: { id: true, slug: true } });
       if (bySlug && bySlug.sku !== product.sku) fail(`product slug belongs to another SKU: ${slug}`);
       if (bySku && bySku.slug !== slug) fail(`product SKU belongs to another slug: ${product.sku}`);
       if (bySlug || bySku) continue;
@@ -265,14 +264,14 @@ async function seedApprovedPrototypeData() {
       createdSettings = 1;
     }
 
-    const protectedAfter = await Promise.all([
-      transaction.user.count(),
-      transaction.session.count(),
-      transaction.account.count(),
-      transaction.verification.count(),
-      transaction.customerRequest.count(),
-      transaction.analyticsEvent.count(),
-    ]);
+    const protectedAfter = [
+      await transaction.user.count(),
+      await transaction.session.count(),
+      await transaction.account.count(),
+      await transaction.verification.count(),
+      await transaction.customerRequest.count(),
+      await transaction.analyticsEvent.count(),
+    ];
     if (protectedBefore.some((count, index) => count !== protectedAfter[index])) fail("protected authentication or customer-history data changed");
 
     return {
@@ -285,7 +284,9 @@ async function seedApprovedPrototypeData() {
       createdServiceImages,
       createdSettings,
     };
-  }, { maxWait: 10_000, timeout: 60_000 });
+  // The deterministic transaction has many relation checks and writes; allow
+  // sufficient time for a cold remote Postgres endpoint without changing data.
+  }, { maxWait: 10_000, timeout: 180_000 });
 
   console.log(JSON.stringify({
     status: "complete",
