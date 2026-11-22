@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   BarChart3,
   Boxes,
@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Images,
+  LogOut,
 } from 'lucide-react';
 import {
   ArabicFontId,
@@ -71,6 +72,10 @@ import {
   queryAdminRequests,
   serializeAdminProductsQuery,
 } from '../../utils/adminQueryContract';
+import type {
+  AdminCustomerRequestDTO,
+  BackendCustomerRequestStatus,
+} from '../../lib/data/admin-contract';
 import { CountdownBadge } from '../storefront/CountdownBadge';
 import { PixelLogo } from '../visuals/PixelLogo';
 import { ProductVisual } from '../visuals/ProductVisual';
@@ -95,6 +100,15 @@ export type AdminTab =
   | 'analytics'
   | 'settings';
 
+function formatSypSnapshot(snapshot: string, lang: Language): string {
+  try {
+    const amount = BigInt(snapshot);
+    return `${new Intl.NumberFormat('en-US').format(amount)} ${lang === 'ar' ? 'ل.س' : 'SYP'}`;
+  } catch {
+    return `${snapshot} ${lang === 'ar' ? 'ل.س' : 'SYP'}`;
+  }
+}
+
 interface AdminDashboardProps {
   lang: Language;
   themeId: DesignThemeId;
@@ -107,11 +121,15 @@ interface AdminDashboardProps {
   heroSlides?: HeroSlide[];
   promoBanners?: PromoBanner[];
   customerRequests: CustomerRequest[];
+  isMockMode: boolean;
   services: StoreService[];
   settings: StoreSettings;
   nowMs: number;
   onToggleLanguage: () => void;
   onBackToStorefront: () => void;
+  onSignOut: () => void;
+  isSigningOut: boolean;
+  signOutError: boolean;
   onSaveProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
   onToggleBestSeller: (productId: string) => void;
@@ -150,11 +168,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   heroSlides = [],
   promoBanners = [],
   customerRequests,
+  isMockMode,
   services,
   settings,
   nowMs,
   onToggleLanguage,
   onBackToStorefront,
+  onSignOut,
+  isSigningOut,
+  signOutError,
   onSaveProduct,
   onDeleteProduct,
   onToggleBestSeller,
@@ -215,6 +237,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
   const [editingRequestNoteId, setEditingRequestNoteId] = useState<string | null>(null);
   const [requestAdminNoteDraft, setRequestAdminNoteDraft] = useState('');
+  const [liveRequestItems, setLiveRequestItems] = useState<AdminCustomerRequestDTO[]>([]);
+  const [liveRequestPagination, setLiveRequestPagination] = useState({
+    page: 1,
+    limit: DEFAULT_ADMIN_REQUESTS_QUERY.limit,
+    total: 0,
+    totalPages: 1,
+  });
+  const [liveRequestsLoading, setLiveRequestsLoading] = useState(false);
+  const [liveRequestsError, setLiveRequestsError] = useState<string | null>(null);
+  const [liveRequestsRetry, setLiveRequestsRetry] = useState(0);
+  const liveRequestSequence = useRef(0);
+  const [liveRequestSaving, setLiveRequestSaving] = useState<Record<string, boolean>>({});
+  const [liveRequestFailures, setLiveRequestFailures] = useState<Record<string, {
+    status?: BackendCustomerRequestStatus;
+    adminNotes?: string | null;
+  }>>({});
+  const liveRequestMutationSequence = useRef(new Map<string, number>());
 
   // Service Editor State
   const [editingService, setEditingService] = useState<StoreService | null>(null);
@@ -382,6 +421,143 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [customerRequests, requestsQuery]
   );
 
+  useEffect(() => {
+    if (isMockMode || (activeTab !== 'overview' && activeTab !== 'requests')) return;
+
+    const sequence = ++liveRequestSequence.current;
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      page: String(requestsQuery.page),
+      limit: String(requestsQuery.limit),
+    });
+    if (requestsQuery.q.trim()) params.set('q', requestsQuery.q.trim());
+    if (requestsQuery.status !== 'ALL') params.set('status', requestsQuery.status);
+
+    setLiveRequestsLoading(true);
+    setLiveRequestsError(null);
+    fetch(`/api/admin/customer-requests?${params.toString()}`, {
+      headers: { accept: 'application/json' },
+      credentials: 'same-origin',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          data?: {
+            items?: AdminCustomerRequestDTO[];
+            pagination?: { page: number; limit: number; total: number; totalPages: number };
+          };
+          error?: { message?: string };
+        };
+        if (!response.ok || !Array.isArray(body.data?.items) || !body.data.pagination) {
+          throw new Error(body.error?.message || 'Unable to load customer requests.');
+        }
+        return { items: body.data.items, pagination: body.data.pagination };
+      })
+      .then((data) => {
+        if (liveRequestSequence.current !== sequence) return;
+        setLiveRequestItems(data.items);
+        setLiveRequestPagination(data.pagination);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || liveRequestSequence.current !== sequence) return;
+        setLiveRequestsError(
+          error instanceof Error ? error.message : 'Unable to load customer requests.',
+        );
+        setLiveRequestItems([]);
+      })
+      .finally(() => {
+        if (liveRequestSequence.current === sequence && !controller.signal.aborted) {
+          setLiveRequestsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    activeTab,
+    isMockMode,
+    liveRequestsRetry,
+    requestsQuery.limit,
+    requestsQuery.page,
+    requestsQuery.q,
+    requestsQuery.status,
+  ]);
+
+  const inboxRequests = useMemo(() => {
+    if (!isMockMode) {
+      return liveRequestItems.map((request) => ({
+        ...request,
+        adminNote: request.adminNotes,
+        phoneNumber: request.customerPhone,
+        priceUsdAtRequest: request.usdPriceCentsSnapshot / 100,
+        priceSypAtRequest: request.sypPriceSnapshot,
+      }));
+    }
+
+    return requestsResult.items.map((request) => ({
+      id: request.id,
+      customerName: request.customerName,
+      phoneNumber: request.phoneNumber,
+      note: request.note,
+      adminNote: request.adminNote ?? null,
+      productName: request.productName,
+      productSku: request.productSku,
+      priceUsdAtRequest: request.priceUsdAtRequest,
+      priceSypAtRequest: String(request.priceSypAtRequest),
+      status: request.status as BackendCustomerRequestStatus,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt ?? request.createdAt,
+    }));
+  }, [isMockMode, liveRequestItems, requestsResult.items]);
+
+  const inboxPagination = isMockMode ? requestsResult : liveRequestPagination;
+
+  const saveLiveRequest = async (
+    requestId: string,
+    patch: { status?: BackendCustomerRequestStatus; adminNotes?: string | null },
+  ) => {
+    const request = liveRequestItems.find((item) => item.id === requestId);
+    if (!request || liveRequestSaving[requestId]) return false;
+
+    const sequence = (liveRequestMutationSequence.current.get(requestId) ?? 0) + 1;
+    liveRequestMutationSequence.current.set(requestId, sequence);
+    setLiveRequestSaving((current) => ({ ...current, [requestId]: true }));
+    setLiveRequestFailures((current) => {
+      const remaining = { ...current };
+      delete remaining[requestId];
+      return remaining;
+    });
+
+    try {
+      const response = await fetch('/api/admin/customer-requests', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ id: requestId, expectedUpdatedAt: request.updatedAt, ...patch }),
+      });
+      const body = await response.json() as {
+        data?: { item?: AdminCustomerRequestDTO };
+      };
+      if (!response.ok || !body.data?.item) throw new Error('Customer request could not be updated.');
+      if (liveRequestMutationSequence.current.get(requestId) !== sequence) return false;
+
+      setLiveRequestItems((items) => items.map((item) => item.id === requestId ? body.data!.item! : item));
+      liveRequestSequence.current += 1;
+      setLiveRequestsRetry((value) => value + 1);
+      showToast('تم حفظ تحديث الطلب', 'Request update saved');
+      return true;
+    } catch {
+      if (liveRequestMutationSequence.current.get(requestId) === sequence) {
+        setLiveRequestFailures((current) => ({ ...current, [requestId]: patch }));
+        setLiveRequestsRetry((value) => value + 1);
+      }
+      return false;
+    } finally {
+      if (liveRequestMutationSequence.current.get(requestId) === sequence) {
+        setLiveRequestSaving((current) => ({ ...current, [requestId]: false }));
+      }
+    }
+  };
+
   const rootCategories = useMemo(
     () => categories.filter((c) => !c.parentId),
     [categories]
@@ -464,7 +640,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       id: 'requests',
       label: { ar: 'طلبات الزبائن (واتساب)', en: 'Customer Requests' },
       icon: <MessageCircle className="w-4 h-4" />,
-      badge: customerRequests.filter((r) => r.status === 'NEW').length,
+      badge: isMockMode ? customerRequests.filter((r) => r.status === 'NEW').length : undefined,
     },
     {
       id: 'analytics',
@@ -500,8 +676,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             className="text-[11px] px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/35 text-amber-200 font-semibold"
           >
             {lang === 'ar'
-              ? 'نسخة تجريبية للمعاينة المحلية (بيانات محلية — يلزم تأمين المصادقة قبل النشر الإنتاجي)'
-              : 'DEMO PROTOTYPE — Local Preview Only (Unauthenticated — Secure Before Production)'}
+              ? 'مساحة إدارة محمية — الوصول للحسابات المعتمدة فقط'
+              : 'PROTECTED ADMIN WORKSPACE — Authorized accounts only'}
           </span>
         </div>
 
@@ -517,6 +693,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             type="button"
+            onClick={onSignOut}
+            disabled={isSigningOut}
+            className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-[11px] sm:text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="w-3.5 h-3.5 text-rose-300" />
+            <span>{isSigningOut ? (lang === 'ar' ? 'جارٍ الخروج…' : 'Signing out…') : (lang === 'ar' ? 'تسجيل الخروج' : 'Sign out')}</span>
+          </button>
+
+          <button
+            type="button"
             data-testid="exit-admin-button"
             onClick={onBackToStorefront}
             className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-md bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer"
@@ -527,6 +713,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </span>
           </button>
         </div>
+        {signOutError && (
+          <p role="alert" className="basis-full text-[11px] font-semibold text-rose-200">
+            {lang === 'ar' ? 'تعذر تسجيل الخروج حالياً. حاول مرة أخرى.' : 'Sign-out could not be completed. Please try again.'}
+          </p>
+        )}
       </header>
 
       {/* Toast Notification */}
@@ -657,11 +848,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       : 'Customer Product Requests'}
                   </div>
                   <div className="font-mono-num text-2xl font-extrabold text-[#8E4DEB] mt-1">
-                    {customerRequests.length}
+                    {isMockMode ? customerRequests.length : liveRequestPagination.total}
                   </div>
                   <div className="text-[11px] text-emerald-700 font-semibold mt-1">
-                    {customerRequests.filter((r) => r.status === 'NEW').length}{' '}
-                    {lang === 'ar' ? 'بانتظار المتابعة' : 'awaiting WhatsApp follow-up'}
+                    {isMockMode
+                      ? `${customerRequests.filter((r) => r.status === 'NEW').length} ${lang === 'ar' ? 'بانتظار المتابعة' : 'awaiting WhatsApp follow-up'}`
+                      : lang === 'ar'
+                      ? 'صندوق Neon متصل'
+                      : 'Connected Neon inbox'}
                   </div>
                 </div>
 
@@ -726,8 +920,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {customerRequests.slice(0, 4).map((req) => {
-                        const phoneVerified = isPhoneLinkVerified(req.phoneNumber);
+                      {inboxRequests.slice(0, 4).map((req) => {
+                        const phoneVerified = isMockMode
+                          ? isPhoneLinkVerified(req.phoneNumber)
+                          : Boolean(req.phoneNumber.trim());
                         return (
                           <tr key={req.id}>
                             <td className="py-3 px-3">
@@ -739,7 +935,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 dir="ltr"
                               >
                                 <span>{req.phoneNumber}</span>
-                                {!phoneVerified && (
+                                {isMockMode && !phoneVerified && (
                                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-sans">
                                     Demo
                                   </span>
@@ -761,7 +957,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 {formatUsd(req.priceUsdAtRequest)}
                               </div>
                               <div className="text-[11px] text-slate-500">
-                                {formatSyp(req.priceSypAtRequest, lang)}
+                                {formatSypSnapshot(req.priceSypAtRequest, lang)}
                               </div>
                             </td>
                             <td className="py-3 px-3">
@@ -2088,17 +2284,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <option value="CONTACTED">
                       CONTACTED ({isAr ? 'تم التواصل' : 'Contacted'})
                     </option>
+                    <option value="IN_PROGRESS">
+                      IN_PROGRESS ({isAr ? 'قيد المتابعة' : 'In Progress'})
+                    </option>
                     <option value="COMPLETED">
                       COMPLETED ({isAr ? 'مكتمل' : 'Completed'})
+                    </option>
+                    <option value="CANCELLED">
+                      CANCELLED ({isAr ? 'ملغى' : 'Cancelled'})
                     </option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-3">
-                {requestsResult.items.map((req) => {
-                  const phoneVerified = isPhoneLinkVerified(req.phoneNumber);
+                {!isMockMode && liveRequestsLoading && (
+                  <p className="text-xs text-slate-500 py-5 text-center" role="status">
+                    {isAr ? 'جارٍ تحميل طلبات الزبائن…' : 'Loading customer requests…'}
+                  </p>
+                )}
+                {!isMockMode && liveRequestsError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800" role="alert">
+                    <p>{isAr ? 'تعذر تحميل طلبات الزبائن. حاول مرة أخرى.' : 'Customer requests could not be loaded. Please try again.'}</p>
+                    <button
+                      type="button"
+                      onClick={() => setLiveRequestsRetry((value) => value + 1)}
+                      className="mt-2 rounded-md border border-rose-300 px-2.5 py-1 font-bold hover:bg-rose-100"
+                    >
+                      {isAr ? 'إعادة المحاولة' : 'Retry'}
+                    </button>
+                  </div>
+                )}
+                {!liveRequestsLoading && !liveRequestsError && inboxRequests.length === 0 && (
+                  <p className="text-xs text-slate-500 py-5 text-center">
+                    {isAr ? 'لا توجد طلبات مطابقة حالياً.' : 'No matching customer requests yet.'}
+                  </p>
+                )}
+                {!liveRequestsError && inboxRequests.map((req) => {
+                  const phoneVerified = isMockMode
+                    ? isPhoneLinkVerified(req.phoneNumber)
+                    : Boolean(req.phoneNumber.trim());
                   const isEditingNote = editingRequestNoteId === req.id;
+                  const isSavingRequest = Boolean(liveRequestSaving[req.id]);
+                  const failedRequestUpdate = liveRequestFailures[req.id];
 
                   return (
                     <div
@@ -2116,7 +2344,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           >
                             {req.phoneNumber}
                           </span>
-                          {!phoneVerified && (
+                          {isMockMode && !phoneVerified && (
                             <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
                               {isAr
                                 ? 'رقم تجريبي غير موثق'
@@ -2137,7 +2365,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="font-mono-num font-bold text-[#111318]">
                             {formatUsd(req.priceUsdAtRequest)}
                           </span>{' '}
-                          ({formatSyp(req.priceSypAtRequest, lang)})
+                          ({formatSypSnapshot(req.priceSypAtRequest, lang)})
                         </div>
 
                         {req.note && (
@@ -2175,31 +2403,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             />
                             <button
                               type="button"
+                              disabled={!isMockMode && isSavingRequest}
                               onClick={() => {
-                                onUpdateRequestStatus(
-                                  req.id,
-                                  req.status,
-                                  requestAdminNoteDraft
-                                );
-                                setEditingRequestNoteId(null);
-                                showToast(
-                                  'تم حفظ الملاحظة الإدارية',
-                                  'Admin note saved'
-                                );
+                                if (isMockMode) {
+                                  onUpdateRequestStatus(
+                                    req.id,
+                                    req.status as CustomerRequest['status'],
+                                    requestAdminNoteDraft
+                                  );
+                                  setEditingRequestNoteId(null);
+                                  showToast(
+                                    'تم حفظ الملاحظة الإدارية',
+                                    'Admin note saved'
+                                  );
+                                  return;
+                                }
+                                void saveLiveRequest(req.id, {
+                                  adminNotes: requestAdminNoteDraft.trim() || null,
+                                }).then((saved) => {
+                                  if (saved) setEditingRequestNoteId(null);
+                                });
                               }}
-                              className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold"
+                              className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {isAr ? 'حفظ' : 'Save'}
+                              {isSavingRequest
+                                ? isAr ? 'جارٍ الحفظ…' : 'Saving…'
+                                : isAr ? 'حفظ' : 'Save'}
                             </button>
                           </div>
                         ) : (
                           <button
                             type="button"
+                            disabled={!isMockMode && isSavingRequest}
                             onClick={() => {
                               setEditingRequestNoteId(req.id);
                               setRequestAdminNoteDraft(req.adminNote || '');
                             }}
-                            className="text-[11px] font-bold text-slate-500 hover:text-[#8E4DEB] pt-1 inline-block"
+                            className="text-[11px] font-bold text-slate-500 hover:text-[#8E4DEB] pt-1 inline-block disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {req.adminNote
                               ? isAr
@@ -2210,26 +2450,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               : '+ Add Follow-up Note'}
                           </button>
                         )}
+
+                        {!isMockMode && failedRequestUpdate && (
+                          <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-700" role="alert">
+                            <span>{isAr ? 'تعذر حفظ التحديث.' : 'The update could not be saved.'}</span>
+                            <button
+                              type="button"
+                              disabled={isSavingRequest}
+                              onClick={() => void saveLiveRequest(req.id, failedRequestUpdate)}
+                              className="font-bold underline disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isAr ? 'إعادة المحاولة' : 'Retry'}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center flex-wrap gap-2 shrink-0">
                         <select
                           value={req.status}
-                          onChange={(e) =>
-                            onUpdateRequestStatus(
-                              req.id,
-                              e.target.value as CustomerRequest['status']
-                            )
-                          }
+                          disabled={!isMockMode && isSavingRequest}
+                          onChange={(e) => {
+                            const status = e.target.value as BackendCustomerRequestStatus;
+                            if (isMockMode) {
+                              onUpdateRequestStatus(req.id, status as CustomerRequest['status']);
+                              return;
+                            }
+                            void saveLiveRequest(req.id, { status });
+                          }}
                           aria-label={`Status for ${req.customerName}`}
-                          className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                          className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <option value="NEW">NEW (جديد)</option>
-                          <option value="CONTACTED">
-                            CONTACTED (تم التواصل)
-                          </option>
+                          <option value="CONTACTED">CONTACTED (تم التواصل)</option>
+                          <option value="IN_PROGRESS">IN_PROGRESS (قيد المتابعة)</option>
                           <option value="COMPLETED">COMPLETED (مكتمل)</option>
+                          <option value="CANCELLED">CANCELLED (ملغى)</option>
                         </select>
+                        {!isMockMode && isSavingRequest && (
+                          <span className="text-[11px] font-bold text-slate-500" role="status">
+                            {isAr ? 'جارٍ الحفظ…' : 'Saving…'}
+                          </span>
+                        )}
 
                         {phoneVerified ? (
                           <a
@@ -2266,7 +2528,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </span>
                         )}
 
-                        <button
+                        {isMockMode && <button
                           type="button"
                           onClick={() => {
                             onDeleteCustomerRequest(req.id);
@@ -2276,12 +2538,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           title={isAr ? 'حذف الطلب' : 'Delete Request'}
                         >
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   );
                 })}
               </div>
+              {!liveRequestsError && inboxPagination.totalPages > 1 && (
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                  <span>
+                    {isAr
+                      ? `صفحة ${inboxPagination.page} من ${inboxPagination.totalPages} — ${inboxPagination.total} طلب`
+                      : `Page ${inboxPagination.page} of ${inboxPagination.totalPages} — ${inboxPagination.total} requests`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={inboxPagination.page <= 1 || liveRequestsLoading}
+                      onClick={() => setRequestsQuery((query) => ({ ...query, page: query.page - 1 }))}
+                      className="rounded-md border border-slate-200 p-1.5 disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50"
+                      aria-label={isAr ? 'الصفحة السابقة' : 'Previous page'}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={inboxPagination.page >= inboxPagination.totalPages || liveRequestsLoading}
+                      onClick={() => setRequestsQuery((query) => ({ ...query, page: query.page + 1 }))}
+                      className="rounded-md border border-slate-200 p-1.5 disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50"
+                      aria-label={isAr ? 'الصفحة التالية' : 'Next page'}
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

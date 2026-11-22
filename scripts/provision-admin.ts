@@ -3,7 +3,7 @@ import 'dotenv/config';
 import { betterAuth } from 'better-auth';
 
 import { isAllowlistedAdminEmail } from '../src/lib/admin-allowlist';
-import { createAuthOptions } from '../src/lib/auth';
+import { createSharedAuthOptions } from '../src/lib/auth-options';
 import { prisma } from '../src/lib/prisma';
 
 function prompt(label: string, hidden = false): Promise<string> {
@@ -65,7 +65,7 @@ async function main() {
   }
 
   const provisioningAuth = betterAuth(
-    createAuthOptions({ disableSignUp: false, includeNextCookies: false }),
+    createSharedAuthOptions(prisma, { disableSignUp: false }),
   );
   await provisioningAuth.api.signUpEmail({ body: { name, email, password } });
   console.log('Administrator account created.');

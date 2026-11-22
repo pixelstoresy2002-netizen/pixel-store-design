@@ -4,9 +4,12 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminDashboard } from '../../components/admin/AdminDashboard';
 import { useStore } from '../../context/StoreContext';
+import { authClient } from '../../lib/auth-client';
 
 export default function AdminRouteClient() {
   const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
+  const [signOutError, setSignOutError] = React.useState(false);
   const {
     lang,
     themeId,
@@ -19,6 +22,7 @@ export default function AdminRouteClient() {
     heroSlides,
     promoBanners,
     customerRequests,
+    isMockMode,
     services,
     settings,
     effectiveNowMs,
@@ -61,11 +65,30 @@ export default function AdminRouteClient() {
         heroSlides={heroSlides}
         promoBanners={promoBanners}
         customerRequests={customerRequests}
+        isMockMode={isMockMode}
         services={services}
         settings={settings}
         nowMs={effectiveNowMs}
         onToggleLanguage={handleToggleLanguage}
         onBackToStorefront={() => router.push('/')}
+        isSigningOut={isSigningOut}
+        signOutError={signOutError}
+        onSignOut={() => {
+          if (isSigningOut) return;
+          setSignOutError(false);
+          setIsSigningOut(true);
+          void authClient.signOut()
+            .then(({ error }) => {
+              if (error) {
+                setSignOutError(true);
+                return;
+              }
+              router.replace('/admin/login');
+              router.refresh();
+            })
+            .catch(() => setSignOutError(true))
+            .finally(() => setIsSigningOut(false));
+        }}
         onSaveProduct={handleSaveProduct}
         onDeleteProduct={handleDeleteProduct}
         onToggleBestSeller={handleToggleBestSeller}

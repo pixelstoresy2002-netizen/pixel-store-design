@@ -158,7 +158,7 @@ export interface CustomerRequest {
   adminNote?: string;
   createdAt: string;
   updatedAt?: string;
-  status: 'NEW' | 'CONTACTED' | 'COMPLETED';
+  status: 'NEW' | 'CONTACTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 }
 
 export interface StoreService {
