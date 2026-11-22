@@ -12,7 +12,8 @@
     "test": "node --experimental-strip-types --test src/utils/storeLogic.test.ts",
     "prisma:generate": "prisma generate",
     "db:seed": "prisma db seed",
-    "admin:provision": "tsx scripts/provision-admin.ts"
+    "admin:provision": "tsx scripts/provision-admin.ts",
+    "prebuild": "prisma generate"
   },
   "dependencies": {
     "@better-auth/core": "1.7.12",
