@@ -18,7 +18,11 @@ function SubcategoryContent() {
   const {
     lang,
     themeId,
-    products,
+    catalogProducts,
+    catalogPagination,
+    catalogIsLoading,
+    catalogError,
+    retryCatalog,
     categories,
     brands,
     useCaseTags,
@@ -29,6 +33,7 @@ function SubcategoryContent() {
     setFilters,
     updateFilters,
     resetFilters,
+    setCatalogPage,
     handleNavigate,
     handleSelectProduct,
     setRequestModalProduct,
@@ -96,7 +101,7 @@ function SubcategoryContent() {
         mode="category"
         lang={lang}
         themeId={themeId}
-        products={products}
+        products={catalogProducts}
         categories={categories}
         brands={brands}
         useCaseTags={useCaseTags}
@@ -109,6 +114,12 @@ function SubcategoryContent() {
         onNavigate={handleNavigate}
         onSelectProduct={handleSelectProduct}
         onRequestProduct={(prod) => setRequestModalProduct(prod)}
+        remoteCatalog
+        catalogPagination={catalogPagination}
+        catalogIsLoading={catalogIsLoading}
+        catalogError={catalogError}
+        onRetryCatalog={retryCatalog}
+        onCatalogPageChange={setCatalogPage}
       />
     </StorefrontShell>
   );

@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -44,6 +45,15 @@ import {
   isOfferActive,
   isPhoneLinkVerified,
 } from '../utils/storeLogic';
+import type { CustomerInterestResult } from '../actions/submit-customer-interest';
+import type { StorefrontDataStatus, StorefrontInitialData } from '../lib/data/storefront-initial-data';
+import {
+  CATALOG_PAGE_SIZE,
+  catalogHistoryUrl,
+  catalogUrl,
+  type CatalogPagination,
+} from '../lib/catalog-contract';
+import { canApplyCatalogResponse } from '../lib/catalog-request-state';
 
 export const DEFAULT_FILTERS: FilterState = {
   searchQuery: '',
@@ -76,12 +86,54 @@ const STORAGE_KEY_LANG = 'pixel_store_lang_v2';
 // Deterministic anchor timestamp so SSR and initial client hydration match to the millisecond
 const SSR_ANCHOR_NOW_MS = 1793793600000;
 
+const EMPTY_STORE_SETTINGS: StoreSettings = {
+  storeName: { ar: '', en: '' },
+  tagline: { ar: '', en: '' },
+  usdToSypRate: 0,
+  phone: '',
+  whatsappNumber: '',
+  address: { ar: '', en: '' },
+  workingHours: { ar: '', en: '' },
+  instagramHandle: '',
+  facebookPage: '',
+  telegramChannel: '',
+  topPromoBanner: { ar: '', en: '' },
+  topPromoActive: false,
+};
+
+function sameStringList(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameFilters(left: FilterState, right: FilterState) {
+  return left.searchQuery === right.searchQuery &&
+    left.categoryId === right.categoryId &&
+    left.subcategoryId === right.subcategoryId &&
+    left.useCaseId === right.useCaseId &&
+    sameStringList(left.brandIds, right.brandIds) &&
+    left.minPriceUsd === right.minPriceUsd &&
+    left.maxPriceUsd === right.maxPriceUsd &&
+    sameStringList(left.conditions, right.conditions) &&
+    sameStringList(left.availabilities, right.availabilities) &&
+    left.onlyOffers === right.onlyOffers &&
+    left.onlyBestSellers === right.onlyBestSellers &&
+    left.onlyNewArrivals === right.onlyNewArrivals &&
+    left.sortBy === right.sortBy;
+}
+
 interface StoreContextValue {
+  isMockMode: boolean;
+  storefrontDataStatus: StorefrontDataStatus;
   lang: Language;
   themeId: DesignThemeId;
   fontId: ArabicFontId;
   settings: StoreSettings;
   products: Product[];
+  catalogProducts: Product[];
+  catalogPagination: CatalogPagination;
+  catalogIsLoading: boolean;
+  catalogError: string | null;
+  retryCatalog: () => void;
   categories: Category[];
   brands: Brand[];
   useCaseTags: UseCaseTag[];
@@ -102,6 +154,7 @@ interface StoreContextValue {
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   updateFilters: (next: Partial<FilterState>) => void;
   resetFilters: () => void;
+  setCatalogPage: (page: number, options?: { syncHistory?: boolean }) => void;
   setSelectedProductId: (id: string) => void;
   setRequestModalProduct: (product: Product | null) => void;
   setSimulateExpiredOffers: React.Dispatch<React.SetStateAction<boolean>>;
@@ -121,7 +174,7 @@ interface StoreContextValue {
     note: string;
     priceUsd: number;
     priceSyp: number;
-  }) => void;
+  }) => Promise<CustomerInterestResult>;
   handleSaveProduct: (prod: Product) => void;
   handleDeleteProduct: (productId: string) => void;
   handleToggleBestSeller: (productId: string) => void;
@@ -152,8 +205,12 @@ interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
-export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
+export const StoreProvider: React.FC<{
+  children: React.ReactNode;
+  initialData?: StorefrontInitialData;
+}> = ({
   children,
+  initialData,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -161,35 +218,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [lang, setLang] = useState<Language>('ar');
   const themeId: DesignThemeId = DEFAULT_THEME_ID;
   const fontId: ArabicFontId = DEFAULT_ARABIC_FONT_ID;
+  const isMockMode = !initialData || initialData.mode === 'mock';
+  const storefrontDataStatus: StorefrontDataStatus = initialData?.status ?? 'ready';
 
   const [settings, setSettings] = useState<StoreSettings>(
-    INITIAL_STORE_SETTINGS
+    initialData?.settings ?? (isMockMode ? INITIAL_STORE_SETTINGS : EMPTY_STORE_SETTINGS)
   );
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
-  const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
+  const [products, setProducts] = useState<Product[]>(initialData?.products ?? INITIAL_PRODUCTS);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(
+    initialData?.products ?? INITIAL_PRODUCTS,
+  );
+  const [catalogPage, setCatalogPageState] = useState(1);
+  const [catalogPagination, setCatalogPagination] = useState<CatalogPagination>({
+    page: 1,
+    limit: CATALOG_PAGE_SIZE,
+    total: initialData?.products.length ?? INITIAL_PRODUCTS.length,
+    totalPages: Math.max(1, Math.ceil((initialData?.products.length ?? INITIAL_PRODUCTS.length) / CATALOG_PAGE_SIZE)),
+  });
+  const [catalogIsLoading, setCatalogIsLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogRetryVersion, setCatalogRetryVersion] = useState(0);
+  const [categories, setCategories] = useState<Category[]>(initialData?.categories ?? INITIAL_CATEGORIES);
+  const [brands, setBrands] = useState<Brand[]>(initialData?.brands ?? INITIAL_BRANDS);
   const [useCaseTags, setUseCaseTags] = useState<UseCaseTag[]>(
-    INITIAL_USE_CASE_TAGS
+    initialData?.useCaseTags ?? INITIAL_USE_CASE_TAGS
   );
-  const [offers, setOffers] = useState<Offer[]>(() =>
-    createInitialOffers(SSR_ANCHOR_NOW_MS)
-  );
+  const [offers, setOffers] = useState<Offer[]>(() => initialData?.offers ?? createInitialOffers(SSR_ANCHOR_NOW_MS));
   const [heroSlides, setHeroSlides] =
-    useState<HeroSlide[]>(INITIAL_HERO_SLIDES);
+    useState<HeroSlide[]>(initialData?.heroSlides ?? INITIAL_HERO_SLIDES);
   const [promoBanners, setPromoBanners] = useState<PromoBanner[]>(
-    INITIAL_PROMO_BANNERS
+    initialData?.promoBanners ?? INITIAL_PROMO_BANNERS
   );
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>(
     INITIAL_CUSTOMER_REQUESTS
   );
-  const [services, setServices] = useState<StoreService[]>(INITIAL_SERVICES);
+  const [services, setServices] = useState<StoreService[]>(initialData?.services ?? INITIAL_SERVICES);
   const [selectedServiceId, setSelectedServiceId] = useState<string | 'ALL'>(
     'ALL'
   );
 
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedProductId, setSelectedProductId] = useState<string>(
-    INITIAL_PRODUCTS[0].id
+    initialData?.products[0]?.id ?? (isMockMode ? INITIAL_PRODUCTS[0].id : '')
   );
   const [requestModalProduct, setRequestModalProduct] =
     useState<Product | null>(null);
@@ -198,9 +268,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [simulateExpiredOffers, setSimulateExpiredOffers] =
     useState<boolean>(false);
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+  const catalogRequestSequence = useRef(0);
+  const initialCatalogUrl = useRef(catalogUrl(DEFAULT_FILTERS, 1));
+  const lastCatalogUrl = useRef<string | null>(null);
+  const hasHandledInitialCatalogRequest = useRef(false);
 
   // Hydrate persisted state from localStorage after mount (zero SSR hydration mismatch)
   useEffect(() => {
+    if (!isMockMode) {
+      setHydratedFromStorage(true);
+      return;
+    }
     try {
       const savedLang = window.localStorage.getItem(STORAGE_KEY_LANG);
       if (savedLang === 'ar' || savedLang === 'en') {
@@ -331,7 +409,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setHydratedFromStorage(true);
     }
-  }, []);
+  }, [isMockMode]);
 
   // Tick countdown clock every 1s on client
   useEffect(() => {
@@ -345,14 +423,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    if (hydratedFromStorage) {
+    if (hydratedFromStorage && isMockMode) {
       try {
         window.localStorage.setItem(STORAGE_KEY_LANG, lang);
       } catch {
         // Ignore storage write errors
       }
     }
-  }, [lang, hydratedFromStorage]);
+  }, [lang, hydratedFromStorage, isMockMode]);
 
   // Apply locked Theme ("contrast") and Arabic Font ("Cairo") on documentElement
   useEffect(() => {
@@ -362,7 +440,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Persist services, settings, products, and requests after initial hydration
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_SERVICES,
@@ -371,10 +449,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [services, hydratedFromStorage]);
+  }, [services, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_SETTINGS,
@@ -383,10 +461,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [settings, hydratedFromStorage]);
+  }, [settings, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_PRODUCTS,
@@ -395,10 +473,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [products, hydratedFromStorage]);
+  }, [products, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_REQUESTS,
@@ -407,19 +485,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [customerRequests, hydratedFromStorage]);
+  }, [customerRequests, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(STORAGE_KEY_OFFERS, JSON.stringify(offers));
     } catch {
       // Ignore
     }
-  }, [offers, hydratedFromStorage]);
+  }, [offers, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_CATEGORIES,
@@ -428,19 +506,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [categories, hydratedFromStorage]);
+  }, [categories, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(STORAGE_KEY_BRANDS, JSON.stringify(brands));
     } catch {
       // Ignore
     }
-  }, [brands, hydratedFromStorage]);
+  }, [brands, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_USECASES,
@@ -449,10 +527,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [useCaseTags, hydratedFromStorage]);
+  }, [useCaseTags, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_HERO_SLIDES,
@@ -461,10 +539,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [heroSlides, hydratedFromStorage]);
+  }, [heroSlides, hydratedFromStorage, isMockMode]);
 
   useEffect(() => {
-    if (!hydratedFromStorage) return;
+    if (!hydratedFromStorage || !isMockMode) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY_PROMO_BANNERS,
@@ -473,7 +551,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Ignore
     }
-  }, [promoBanners, hydratedFromStorage]);
+  }, [promoBanners, hydratedFromStorage, isMockMode]);
 
   const effectiveNowMs = simulateExpiredOffers
     ? realNowMs + 6 * 24 * 60 * 60 * 1000
@@ -494,12 +572,84 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const updateFilters = useCallback((next: Partial<FilterState>) => {
-    setFilters((prev) => ({ ...prev, ...next }));
-  }, []);
+    const merged = { ...filters, ...next };
+    if (sameFilters(filters, merged)) return;
+    setCatalogPageState(1);
+    setFilters(merged);
+    if (typeof window !== 'undefined' && pathname === '/catalog') {
+      const target = catalogHistoryUrl(merged, 1);
+      if (`${window.location.pathname}${window.location.search}` !== target) {
+        window.history.pushState(null, '', target);
+      }
+    }
+  }, [filters, pathname]);
 
   const resetFilters = useCallback(() => {
+    if (sameFilters(filters, DEFAULT_FILTERS)) return;
+    setCatalogPageState(1);
     setFilters(DEFAULT_FILTERS);
+    if (typeof window !== 'undefined' && pathname === '/catalog') {
+      window.history.pushState(null, '', catalogHistoryUrl(DEFAULT_FILTERS, 1));
+    }
+  }, [filters, pathname]);
+
+  const setCatalogPage = useCallback((page: number, options: { syncHistory?: boolean } = {}) => {
+    const nextPage = Math.max(1, Math.trunc(page) || 1);
+    setCatalogPageState(nextPage);
+    if (options.syncHistory !== false && typeof window !== 'undefined' && pathname === '/catalog') {
+      window.history.pushState(null, '', catalogHistoryUrl(filters, nextPage));
+    }
+  }, [filters, pathname]);
+
+  const retryCatalog = useCallback(() => {
+    lastCatalogUrl.current = null;
+    setCatalogRetryVersion((version) => version + 1);
   }, []);
+
+  useEffect(() => {
+    if (isMockMode || storefrontDataStatus !== 'ready') return;
+    const url = catalogUrl(filters, catalogPage);
+    // The server-rendered initial catalog is already in the client payload.
+    if (!hasHandledInitialCatalogRequest.current) {
+      hasHandledInitialCatalogRequest.current = true;
+      if (url === initialCatalogUrl.current) {
+        lastCatalogUrl.current = url;
+        return;
+      }
+    }
+    if (url === lastCatalogUrl.current) return;
+    lastCatalogUrl.current = url;
+
+    const controller = new AbortController();
+    const sequence = ++catalogRequestSequence.current;
+    setCatalogIsLoading(true);
+    setCatalogError(null);
+
+    void fetch(url, { signal: controller.signal, headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        const payload = await response.json() as {
+          data?: { items?: Product[]; pagination?: CatalogPagination };
+          error?: { message?: string };
+        };
+        if (!response.ok || !payload.data?.items || !payload.data.pagination) {
+          throw new Error(payload.error?.message ?? 'Catalog data is temporarily unavailable.');
+        }
+        if (!canApplyCatalogResponse(sequence, catalogRequestSequence.current, controller.signal.aborted)) return;
+        setCatalogProducts(payload.data.items);
+        setCatalogPagination(payload.data.pagination);
+      })
+      .catch((error: unknown) => {
+        if (!canApplyCatalogResponse(sequence, catalogRequestSequence.current, controller.signal.aborted)) return;
+        setCatalogError(error instanceof Error ? error.message : 'Catalog data is temporarily unavailable.');
+      })
+      .finally(() => {
+        if (canApplyCatalogResponse(sequence, catalogRequestSequence.current, controller.signal.aborted)) {
+          setCatalogIsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [catalogPage, catalogRetryVersion, filters, isMockMode, storefrontDataStatus]);
 
   const handleNavigate = useCallback(
     (
@@ -606,10 +756,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const handleSearchSubmit = useCallback(
     (query: string) => {
-      setFilters((prev) => ({
-        ...prev,
-        searchQuery: query,
-      }));
+      updateFilters({ searchQuery: query });
       if (
         query.trim() !== '' &&
         pathname !== '/catalog' &&
@@ -618,7 +765,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         router.push('/catalog');
       }
     },
-    [pathname, router]
+    [pathname, router, updateFilters]
   );
 
   const handleSelectProduct = useCallback(
@@ -643,7 +790,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       note: string;
       priceUsd: number;
       priceSyp: number;
-    }) => {
+    }): Promise<CustomerInterestResult> => {
+      if (!isMockMode) {
+        return fetch('/api/customer-interest', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({
+            productId: payload.product.id,
+            customerName: payload.customerName,
+            customerPhone: payload.phoneNumber,
+            note: payload.note,
+          }),
+        }).then(async (response): Promise<CustomerInterestResult> => {
+          const body = await response.json() as { error?: { code?: string } };
+          if (response.status === 201) return { status: 'success' };
+          if (body.error?.code === 'VALIDATION_ERROR') return { status: 'validation-error' };
+          if (body.error?.code === 'DUPLICATE_REQUEST') return { status: 'duplicate' };
+          if (body.error?.code === 'PRODUCT_UNAVAILABLE') return { status: 'unavailable' };
+          return { status: 'error' };
+        }).catch((): CustomerInterestResult => ({ status: 'error' }));
+      }
       const newReq: CustomerRequest = {
         id: `req-${Date.now()}`,
         productId: payload.product.id,
@@ -658,8 +824,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         status: 'NEW',
       };
       setCustomerRequests((prev) => [newReq, ...prev]);
+      return Promise.resolve({ status: 'success' });
     },
-    []
+    [isMockMode]
   );
 
   const handleSaveProduct = useCallback((prod: Product) => {
@@ -904,11 +1071,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const value = useMemo<StoreContextValue>(
     () => ({
+      isMockMode,
+      storefrontDataStatus,
       lang,
       themeId,
       fontId,
       settings,
       products,
+      catalogProducts,
+      catalogPagination,
+      catalogIsLoading,
+      catalogError,
+      retryCatalog,
       categories,
       brands,
       useCaseTags,
@@ -929,6 +1103,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       setFilters,
       updateFilters,
       resetFilters,
+      setCatalogPage,
       setSelectedProductId,
       setRequestModalProduct,
       setSimulateExpiredOffers,
@@ -962,10 +1137,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }),
     [
       lang,
+      isMockMode,
+      storefrontDataStatus,
       themeId,
       fontId,
       settings,
       products,
+      catalogProducts,
+      catalogPagination,
+      catalogIsLoading,
+      catalogError,
+      retryCatalog,
       categories,
       brands,
       useCaseTags,
@@ -984,6 +1166,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       simulateExpiredOffers,
       updateFilters,
       resetFilters,
+      setCatalogPage,
       handleToggleLanguage,
       handleNavigate,
       handleSearchSubmit,

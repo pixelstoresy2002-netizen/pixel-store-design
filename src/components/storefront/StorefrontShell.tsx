@@ -28,6 +28,7 @@ export const StorefrontShell: React.FC<StorefrontShellProps> = ({
     selectedServiceId,
     activeOffersCount,
     pendingRequestsCount,
+    storefrontDataStatus,
     requestModalProduct,
     offers,
     effectiveNowMs,
@@ -64,6 +65,13 @@ export const StorefrontShell: React.FC<StorefrontShellProps> = ({
         onSearchSubmit={handleSearchSubmit}
       />
 
+      {storefrontDataStatus === 'unavailable' && (
+        <div role="alert" className="bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-700">
+          {lang === 'ar'
+            ? 'تعذر تحميل كتالوج المتجر حالياً. يرجى المحاولة لاحقاً.'
+            : 'The store catalog is temporarily unavailable. Please try again later.'}
+        </div>
+      )}
       <main className="flex-1">{children}</main>
 
       <StoreFooter

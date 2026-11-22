@@ -31,12 +31,13 @@ test('maps a product from cents and derives parent/subcategory hierarchy', () =>
   assert.equal(product.priceUsd, 1490.99);
   assert.equal(product.categoryId, 'laptops');
   assert.equal(product.subcategoryId, 'gaming-laptops');
+  assert.equal(product.primaryImage, '/first.jpg');
   assert.deepEqual(product.galleryImages, ['/first.jpg', '/second.jpg']);
   assert.equal(product.laptopSpecs?.memory, '');
   assert.deepEqual(product.specs[0]?.label, { ar: 'المعالج', en: 'CPU' });
 });
 
-test('preserves an empty product image state and category slugs for UI filtering', () => {
+test('keeps ProductImage media authoritative while deriving a decorative fallback', () => {
   const product = mapProduct({
     id: 'id', slug: 'slug', sku: 'sku', nameAr: 'أ', nameEn: 'A', descriptionAr: 'ب', descriptionEn: 'B',
     priceUsdCents: 0, stockStatus: 'ON_REQUEST', condition: 'USED', isBestSeller: false,
@@ -49,7 +50,10 @@ test('preserves an empty product image state and category slugs for UI filtering
     sortOrder: 10, isActive: true, parent: null, useCaseTags: [],
   });
 
-  assert.equal(product.primaryImage, '');
+  // No ProductImage records are invented: the media collection remains empty.
+  // primaryImage is only the documented category-based decorative visual.
+  assert.equal(product.primaryImage, 'audio-earbuds-front');
+  assert.equal(product.secondaryImage, 'audio-earbuds-front');
   assert.deepEqual(product.galleryImages, []);
   assert.equal(category.id, 'audio');
   assert.equal(category.parentId, undefined);

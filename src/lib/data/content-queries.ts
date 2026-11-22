@@ -50,16 +50,15 @@ export async function getOffers(input: OfferListQueryInput = {}, now = new Date(
     ];
   }
 
-  const [items, total] = await prisma.$transaction([
-    prisma.offer.findMany({
-      where,
-      include: { product: { include: { images: { orderBy: { sortOrder: 'asc' }, take: 5 } } } },
-      orderBy: [{ startsAt: query.order }, { id: 'asc' }],
-      skip: query.skip,
-      take: query.limit,
-    }),
-    prisma.offer.count({ where }),
-  ]);
+  // Keep PrismaPg reads serial to avoid overlapping queries on its active client.
+  const items = await prisma.offer.findMany({
+    where,
+    include: { product: { include: { images: { orderBy: { sortOrder: 'asc' }, take: 5 } } } },
+    orderBy: [{ startsAt: query.order }, { id: 'asc' }],
+    skip: query.skip,
+    take: query.limit,
+  });
+  const total = await prisma.offer.count({ where });
 
   return { items, total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit), now };
 }
@@ -115,6 +114,20 @@ export async function getServiceDetailBySlug(slug: string) {
 
   return prisma.storeService.findFirst({
     where: { slug: normalizedSlug, isActive: true },
+    include: { images: { orderBy: { sortOrder: 'asc' }, take: 5 } },
+  });
+}
+
+/** Resolves the public service route, which accepts the established id or slug. */
+export async function getServiceDetailByRouteIdentifier(identifier: string) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+
+  return prisma.storeService.findFirst({
+    where: {
+      isActive: true,
+      OR: [{ id: normalizedIdentifier }, { slug: normalizedIdentifier }],
+    },
     include: { images: { orderBy: { sortOrder: 'asc' }, take: 5 } },
   });
 }

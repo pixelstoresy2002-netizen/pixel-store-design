@@ -17,7 +17,11 @@ function CategoryContent() {
   const {
     lang,
     themeId,
-    products,
+    catalogProducts,
+    catalogPagination,
+    catalogIsLoading,
+    catalogError,
+    retryCatalog,
     categories,
     brands,
     useCaseTags,
@@ -28,6 +32,7 @@ function CategoryContent() {
     setFilters,
     updateFilters,
     resetFilters,
+    setCatalogPage,
     handleNavigate,
     handleSelectProduct,
     setRequestModalProduct,
@@ -91,7 +96,7 @@ function CategoryContent() {
         mode="category"
         lang={lang}
         themeId={themeId}
-        products={products}
+        products={catalogProducts}
         categories={categories}
         brands={brands}
         useCaseTags={useCaseTags}
@@ -104,6 +109,12 @@ function CategoryContent() {
         onNavigate={handleNavigate}
         onSelectProduct={handleSelectProduct}
         onRequestProduct={(prod) => setRequestModalProduct(prod)}
+        remoteCatalog
+        catalogPagination={catalogPagination}
+        catalogIsLoading={catalogIsLoading}
+        catalogError={catalogError}
+        onRetryCatalog={retryCatalog}
+        onCatalogPageChange={setCatalogPage}
       />
     </StorefrontShell>
   );

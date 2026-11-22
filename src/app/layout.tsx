@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import React from 'react';
 import { StoreProvider } from '../context/StoreContext';
+import { getStorefrontInitialData } from '../lib/data/storefront-initial-data';
 import './globals.css';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Pixel Store — Electronics & Gaming Hardware',
@@ -21,11 +24,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const initialData = await getStorefrontInitialData();
   return (
     <html
       lang="ar"
@@ -47,7 +51,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#ECEAF2] text-[#111318] antialiased selection:bg-[#8E4DEB]/15 selection:text-[#8E4DEB]">
-        <StoreProvider>{children}</StoreProvider>
+        <StoreProvider initialData={initialData}>{children}</StoreProvider>
       </body>
     </html>
   );

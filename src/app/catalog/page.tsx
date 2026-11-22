@@ -5,13 +5,18 @@ import { useSearchParams } from 'next/navigation';
 import { CatalogPage } from '../../components/storefront/CatalogPage';
 import { StorefrontShell } from '../../components/storefront/StorefrontShell';
 import { DEFAULT_FILTERS, useStore } from '../../context/StoreContext';
+import { filtersFromCatalogSearchParams, pageFromCatalogSearchParams } from '../../lib/catalog-contract';
 
 function CatalogContent() {
   const searchParams = useSearchParams();
   const {
     lang,
     themeId,
-    products,
+    catalogProducts,
+    catalogPagination,
+    catalogIsLoading,
+    catalogError,
+    retryCatalog,
     categories,
     brands,
     useCaseTags,
@@ -21,42 +26,20 @@ function CatalogContent() {
     filters,
     updateFilters,
     resetFilters,
+    setCatalogPage,
     handleNavigate,
     handleSelectProduct,
     setRequestModalProduct,
   } = useStore();
 
-  const bestSellersParam = searchParams.get('bestSellers');
-  const newArrivalsParam = searchParams.get('newArrivals');
-  const categoryParam = searchParams.get('category');
-  const queryParam = searchParams.get('q');
-
   useEffect(() => {
-    if (bestSellersParam === '1') {
-      updateFilters({
-        ...DEFAULT_FILTERS,
-        onlyBestSellers: true,
-      });
-    } else if (newArrivalsParam === '1') {
-      updateFilters({
-        ...DEFAULT_FILTERS,
-        onlyNewArrivals: true,
-      });
-    } else if (categoryParam) {
-      updateFilters({
-        categoryId: categoryParam,
-      });
-    } else if (queryParam !== null) {
-      updateFilters({
-        searchQuery: queryParam,
-      });
-    }
+    const params = new URLSearchParams(searchParams.toString());
+    updateFilters(filtersFromCatalogSearchParams(params, DEFAULT_FILTERS));
+    setCatalogPage(pageFromCatalogSearchParams(params), { syncHistory: false });
   }, [
-    bestSellersParam,
-    newArrivalsParam,
-    categoryParam,
-    queryParam,
+    searchParams,
     updateFilters,
+    setCatalogPage,
   ]);
 
   return (
@@ -65,7 +48,7 @@ function CatalogContent() {
         mode="shop"
         lang={lang}
         themeId={themeId}
-        products={products}
+        products={catalogProducts}
         categories={categories}
         brands={brands}
         useCaseTags={useCaseTags}
@@ -78,6 +61,12 @@ function CatalogContent() {
         onNavigate={handleNavigate}
         onSelectProduct={handleSelectProduct}
         onRequestProduct={(prod) => setRequestModalProduct(prod)}
+        remoteCatalog
+        catalogPagination={catalogPagination}
+        catalogIsLoading={catalogIsLoading}
+        catalogError={catalogError}
+        onRetryCatalog={retryCatalog}
+        onCatalogPageChange={setCatalogPage}
       />
     </StorefrontShell>
   );

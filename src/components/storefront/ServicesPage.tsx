@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRight,
@@ -578,21 +579,29 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                 srv.id === 'service-cooling' || srv.iconKey === 'cooling';
               const srvGallery = getServiceGalleryImages(srv);
               return (
-                <div
+                <Link
                   key={srv.id}
                   data-testid={`service-card-${srv.id}`}
-                  className={`rounded-xl bg-white border-2 transition-all flex flex-col justify-between overflow-hidden shadow-xs group ${
-                    isCooling
-                      ? 'border-[#8E4DEB] ring-2 ring-[#8E4DEB]/15'
-                      : 'border-[#111318]'
-                  }`}
+                  href={`/services/${encodeURIComponent(srv.id)}`}
+                  aria-label={
+                    lang === 'ar'
+                      ? `عرض تفاصيل خدمة ${srv.title[lang]}`
+                      : `View details for ${srv.title[lang]}`
+                  }
+                  className="block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8E4DEB]"
                 >
-                  <div>
+                  <article
+                    className={`flex h-full flex-col justify-between overflow-hidden rounded-xl bg-white border-2 transition-all shadow-xs group ${
+                      isCooling
+                        ? 'border-[#8E4DEB] ring-2 ring-[#8E4DEB]/15'
+                        : 'border-[#111318]'
+                    }`}
+                  >
+                    <div>
                     {/* Service Cover Image Area (Supports 5-Image Hover Cycling) */}
                     <div
                       data-testid={`service-card-cover-${srv.id}`}
-                      onClick={() => handleSelectServiceWithReset(srv.id)}
-                      className="relative aspect-[16/10] w-full bg-[#F8F7FA] border-b-2 border-[#111318] overflow-hidden cursor-pointer"
+                      className="relative aspect-[16/10] w-full bg-[#F8F7FA] border-b-2 border-[#111318] overflow-hidden"
                     >
                       <ServiceCardCover
                         images={srvGallery}
@@ -628,15 +637,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                     {/* Service Card Body */}
                     <div className="p-5 space-y-3.5">
                       <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectServiceWithReset(srv.id)}
-                          className="text-start group-hover:text-[#8E4DEB] transition-colors cursor-pointer"
-                        >
-                          <h2 className="text-lg font-extrabold text-[#111318] group-hover:text-[#8E4DEB] leading-snug">
-                            {srv.title[lang]}
-                          </h2>
-                        </button>
+                        <h2 className="text-lg font-extrabold text-[#111318] group-hover:text-[#8E4DEB] leading-snug">
+                          {srv.title[lang]}
+                        </h2>
                         <p className="text-xs font-semibold text-[#8E4DEB] leading-relaxed">
                           {srv.summary?.[lang] || srv.subtitle[lang]}
                         </p>
@@ -680,11 +683,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
                   {/* Card Footer: Open Detailed View */}
                   <div className="px-5 pb-5 pt-3 border-t border-slate-100">
-                    <button
-                      type="button"
+                    <span
                       data-testid={`open-service-detail-${srv.id}`}
-                      onClick={() => handleSelectServiceWithReset(srv.id)}
-                      className="w-full py-2.5 px-4 rounded-lg bg-[#111318] hover:bg-[#8E4DEB] text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2.5 px-4 rounded-lg bg-[#111318] group-hover:bg-[#8E4DEB] text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                     >
                       <span>
                         {lang === 'ar'
@@ -696,9 +697,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                       ) : (
                         <ArrowRight className="w-3.5 h-3.5" />
                       )}
-                    </button>
+                    </span>
                   </div>
-                </div>
+                  </article>
+                </Link>
               );
             })}
           </div>

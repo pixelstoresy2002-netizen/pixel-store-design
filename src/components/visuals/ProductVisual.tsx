@@ -80,6 +80,28 @@ export const ProductVisual: React.FC<ProductVisualProps> = ({
   const angleIndex = resolveVisualAngleIndex(key);
   const isSecondary = angleIndex === 2;
 
+  // A missing persisted image must not look like an unrelated product.
+  // This neutral treatment is deliberately decorative and is safe for cards,
+  // galleries, and the product-detail view.
+  if (!key) {
+    return (
+      <div
+        className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-b from-[#FAF9FC] to-[#ECEAF2] text-slate-400 ${className}`}
+        role="img"
+        aria-label={`${alt} — product image unavailable`}
+        data-visual-key=""
+        data-angle-index={angleIndex}
+      >
+        <div
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-lg"
+          aria-hidden="true"
+        >
+          ···
+        </div>
+      </div>
+    );
+  }
+
   // Support external/local raster & SVG image paths (/assets/services/*, /assets/aistudio/*, etc.)
   if (
     key.startsWith('http://') ||

@@ -32,8 +32,24 @@ export default function ProductDetailRoutePage() {
     }
   }, [routeProductId, setSelectedProductId]);
 
-  const selectedProduct =
-    products.find((p) => p.id === routeProductId) ?? products[0];
+  const selectedProduct = products.find((p) => p.id === routeProductId);
+
+  if (!selectedProduct) {
+    return (
+      <StorefrontShell currentView="product" activeCategoryId="ALL">
+        <section className="mx-auto max-w-3xl px-6 py-24 text-center">
+          <h1 className="text-xl font-bold text-[#111318]">
+            {lang === 'ar' ? 'المنتج غير متاح' : 'Product unavailable'}
+          </h1>
+          <p className="mt-3 text-sm text-slate-600">
+            {lang === 'ar'
+              ? 'لم يتم العثور على هذا المنتج في الكتالوج الحالي.'
+              : 'This product was not found in the current catalog.'}
+          </p>
+        </section>
+      </StorefrontShell>
+    );
+  }
 
   return (
     <StorefrontShell

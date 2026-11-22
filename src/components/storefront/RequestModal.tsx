@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CheckCircle2, MessageCircle, X } from 'lucide-react';
 import { Language, Offer, Product } from '../../types/store';
 import {
@@ -10,6 +10,20 @@ import {
   validateCustomerRequest,
 } from '../../utils/storeLogic';
 import { ProductVisual } from '../visuals/ProductVisual';
+import type { CustomerInterestResult } from '../../actions/submit-customer-interest';
+import {
+  getDialogTabTargetIndex,
+  shouldCloseDialogForKey,
+} from '../../lib/dialog-focus';
+
+const FOCUSABLE_DIALOG_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'textarea:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 interface RequestModalProps {
   product: Product | null;
@@ -25,7 +39,7 @@ interface RequestModalProps {
     note: string;
     priceUsd: number;
     priceSyp: number;
-  }) => void;
+  }) => Promise<CustomerInterestResult>;
 }
 
 export const RequestModal: React.FC<RequestModalProps> = ({
@@ -42,13 +56,95 @@ export const RequestModal: React.FC<RequestModalProps> = ({
   const [note, setNote] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const returnButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const submissionInFlightRef = useRef(false);
+  const submissionSequenceRef = useRef(0);
+  const productId = product?.id;
+
+  useLayoutEffect(() => {
+    if (!productId) return;
+
+    setCustomerName('');
+    setPhoneNumber('');
+    setNote('');
+    setErrorMsg(null);
+    setSubmitted(false);
+    setIsSubmitting(false);
+    submissionInFlightRef.current = false;
+    submissionSequenceRef.current += 1;
+    triggerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const frame = window.requestAnimationFrame(() => {
+      nameInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      submissionSequenceRef.current += 1;
+      submissionInFlightRef.current = false;
+      const trigger = triggerRef.current;
+      if (trigger?.isConnected) trigger.focus();
+    };
+  }, [productId]);
+
+  useEffect(() => {
+    if (submitted) returnButtonRef.current?.focus();
+  }, [submitted]);
+
+  useEffect(() => {
+    if (!productId) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [productId]);
+
+  const handleClose = useCallback(() => {
+    if (submissionInFlightRef.current) return;
+    setCustomerName('');
+    setPhoneNumber('');
+    setNote('');
+    setErrorMsg(null);
+    setSubmitted(false);
+    onClose();
+  }, [onClose]);
 
   if (!product) return null;
 
   const pricing = resolveProductPricing(product, offers, usdToSypRate, nowMs);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (shouldCloseDialogForKey(event.key)) {
+      event.preventDefault();
+      handleClose();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+    const focusable = dialogRef.current
+      ? Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_DIALOG_SELECTOR))
+      : [];
+    const activeIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    const targetIndex = getDialogTabTargetIndex(
+      focusable.length,
+      activeIndex,
+      event.shiftKey,
+    );
+    if (targetIndex === null) return;
+
+    event.preventDefault();
+    focusable[targetIndex]?.focus();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submissionInFlightRef.current) return;
     const validation = validateCustomerRequest({ customerName, phoneNumber });
     if (!validation.valid) {
       setErrorMsg(
@@ -60,15 +156,55 @@ export const RequestModal: React.FC<RequestModalProps> = ({
     }
 
     setErrorMsg(null);
-    onSubmitRequest({
-      product,
-      customerName: customerName.trim(),
-      phoneNumber: phoneNumber.trim(),
-      note: note.trim(),
-      priceUsd: pricing.effectiveUsd,
-      priceSyp: pricing.effectiveSyp,
-    });
-    setSubmitted(true);
+    submissionInFlightRef.current = true;
+    const submissionSequence = ++submissionSequenceRef.current;
+    setIsSubmitting(true);
+    try {
+      const result = await onSubmitRequest({
+        product,
+        customerName: customerName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        note: note.trim(),
+        // Display prices are retained for mock mode only. The server action
+        // always re-reads product, offer, and exchange-rate values.
+        priceUsd: pricing.effectiveUsd,
+        priceSyp: pricing.effectiveSyp,
+      });
+      if (submissionSequence !== submissionSequenceRef.current) return;
+      if (result.status === 'success') {
+        setSubmitted(true);
+        return;
+      }
+      setErrorMsg(
+        lang === 'ar'
+          ? result.status === 'duplicate'
+            ? 'تم استلام طلب مماثل مؤخراً. يرجى الانتظار قبل الإرسال مرة أخرى.'
+            : result.status === 'validation-error'
+              ? 'يرجى مراجعة الاسم ورقم الهاتف ثم المحاولة مرة أخرى.'
+              : result.status === 'unavailable'
+                ? 'لم يعد هذا المنتج متاحاً للطلب. يرجى اختيار منتج آخر.'
+            : 'تعذر تسجيل الطلب حالياً. يرجى المحاولة لاحقاً.'
+          : result.status === 'duplicate'
+            ? 'A matching request was received recently. Please wait before submitting again.'
+            : result.status === 'validation-error'
+              ? 'Please check your name and phone number, then try again.'
+              : result.status === 'unavailable'
+                ? 'This product is no longer available to request. Please choose another product.'
+            : 'Your request could not be recorded right now. Please try again later.'
+      );
+    } catch {
+      if (submissionSequence !== submissionSequenceRef.current) return;
+      setErrorMsg(
+        lang === 'ar'
+          ? 'تعذر تسجيل الطلب حالياً. يرجى المحاولة لاحقاً.'
+          : 'Your request could not be recorded right now. Please try again later.'
+      );
+    } finally {
+      if (submissionSequence === submissionSequenceRef.current) {
+        submissionInFlightRef.current = false;
+        setIsSubmitting(false);
+      }
+    }
   };
 
   return (
@@ -77,9 +213,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="request-modal-title"
-      onClick={onClose}
+      aria-describedby="request-modal-description"
+      tabIndex={-1}
+      onKeyDown={handleDialogKeyDown}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) handleClose();
+      }}
     >
       <div
+        ref={dialogRef}
         className="relative w-full max-w-md my-auto bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden text-start"
         onClick={(e) => e.stopPropagation()}
       >
@@ -97,7 +239,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
                 ? 'طلب المنتج عبر واتساب'
                 : 'Request Product Now'}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p id="request-modal-description" className="text-xs text-slate-500 mt-0.5">
               {lang === 'ar'
                 ? 'أرسل طلبك وسيتواصل معك المتجر عبر واتساب.'
                 : 'Submit your request and the store will contact you via WhatsApp.'}
@@ -105,9 +247,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={isSubmitting}
             aria-label={lang === 'ar' ? 'إغلاق نافذة الطلب' : 'Close request dialog'}
-            className="p-2 rounded-lg text-slate-400 hover:text-[#111318] hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-[#111318] hover:bg-slate-100 transition-colors focus-visible:outline-2 focus-visible:outline-[#8E4DEB] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -160,18 +303,20 @@ export const RequestModal: React.FC<RequestModalProps> = ({
             <div className="pt-2 flex items-center justify-center gap-3">
               <button
                 type="button"
-                onClick={onClose}
-                className="w-full py-2.5 px-4 rounded-lg bg-[#111318] text-white text-xs font-semibold hover:bg-[#8E4DEB] transition-colors"
+                ref={returnButtonRef}
+                onClick={handleClose}
+                className="w-full py-2.5 px-4 rounded-lg bg-[#111318] text-white text-xs font-semibold hover:bg-[#8E4DEB] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8E4DEB]"
               >
                 {lang === 'ar' ? 'العودة إلى المتجر' : 'Return to Store'}
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-5 space-y-4" noValidate>
+          <form onSubmit={handleSubmit} className="p-5 space-y-4" noValidate aria-busy={isSubmitting}>
             {errorMsg && (
               <div
                 role="alert"
+                id="request-modal-error"
                 className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs font-medium text-rose-700"
               >
                 {errorMsg}
@@ -187,9 +332,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({
               </label>
               <input
                 id="req-customer-name"
+                ref={nameInputRef}
                 type="text"
                 required
                 value={customerName}
+                aria-invalid={Boolean(errorMsg)}
+                aria-describedby={errorMsg ? 'request-modal-error' : undefined}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder={
                   lang === 'ar'
@@ -215,6 +363,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({
                 dir="ltr"
                 required
                 value={phoneNumber}
+                aria-invalid={Boolean(errorMsg)}
+                aria-describedby={errorMsg ? 'request-modal-error' : undefined}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="+963 9XX XXX XXX"
                 className="w-full px-3.5 py-2.5 text-sm font-mono-num rounded-lg border border-slate-300 bg-white text-[#111318] placeholder:text-slate-400 focus:outline-none focus:border-[#8E4DEB] focus:ring-2 focus:ring-[#8E4DEB]/15 text-start"
@@ -245,18 +395,26 @@ export const RequestModal: React.FC<RequestModalProps> = ({
             <div className="pt-2 flex items-center justify-end gap-2.5">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                onClick={handleClose}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors focus-visible:outline-2 focus-visible:outline-[#8E4DEB] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {lang === 'ar' ? 'إلغاء' : 'Cancel'}
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7B39D8] text-white text-xs font-bold transition-colors shadow-sm"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7B39D8] text-white text-xs font-bold transition-colors shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8E4DEB] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>
-                  {lang === 'ar' ? 'إرسال طلب المنتج' : 'Submit Request'}
+                  {isSubmitting
+                    ? lang === 'ar'
+                      ? 'جارٍ الإرسال...'
+                      : 'Submitting...'
+                    : lang === 'ar'
+                      ? 'إرسال طلب المنتج'
+                      : 'Submit Request'}
                 </span>
               </button>
             </div>

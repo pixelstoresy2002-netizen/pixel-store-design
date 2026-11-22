@@ -59,9 +59,23 @@ function productWhere(
     };
   }
   if (query.brandSlug) where.brand = { slug: query.brandSlug };
+  else if (query.brandSlugs.length > 0) where.brand = { slug: { in: query.brandSlugs } };
   if (query.useCaseSlug) where.useCaseTags = { some: { slug: query.useCaseSlug } };
   if (query.condition) where.condition = query.condition;
+  else if (query.conditions.length > 0) where.condition = { in: query.conditions };
   if (query.availability) where.stockStatus = query.availability;
+  else if (query.availabilities.length > 0) where.stockStatus = { in: query.availabilities };
+  if (query.minPriceUsdCents !== undefined || query.maxPriceUsdCents !== undefined) {
+    where.priceUsdCents = {
+      ...(query.minPriceUsdCents !== undefined ? { gte: query.minPriceUsdCents } : {}),
+      ...(query.maxPriceUsdCents !== undefined ? { lte: query.maxPriceUsdCents } : {}),
+    };
+  }
+  if (query.onlyOffers) {
+    where.offers = {
+      some: { isEnabled: true, startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
+    };
+  }
   if (query.bestSeller !== undefined) where.isBestSeller = query.bestSeller;
   if (query.newArrival !== undefined) where.isNewArrival = query.newArrival;
   if (query.featured !== undefined) where.isFeatured = query.featured;
@@ -72,16 +86,16 @@ function productWhere(
 export async function getProducts(input: ProductListQueryInput = {}) {
   const query = normalizeProductListQuery(input);
   const where = productWhere(query);
-  const [items, total] = await prisma.$transaction([
-    prisma.product.findMany({
-      where,
-      include: productInclude,
-      orderBy: productOrderBy(query),
-      skip: query.skip,
-      take: query.limit,
-    }),
-    prisma.product.count({ where }),
-  ]);
+  // PrismaPg uses one active client for this request; sequential reads avoid
+  // overlapping client queries while preserving the same public result shape.
+  const items = await prisma.product.findMany({
+    where,
+    include: productInclude,
+    orderBy: productOrderBy(query),
+    skip: query.skip,
+    take: query.limit,
+  });
+  const total = await prisma.product.count({ where });
 
   return { items, total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) };
 }

@@ -60,6 +60,12 @@ interface CatalogPageProps {
   ) => void;
   onSelectProduct: (productId: string) => void;
   onRequestProduct: (product: Product) => void;
+  remoteCatalog?: boolean;
+  catalogPagination?: { page: number; totalPages: number };
+  catalogIsLoading?: boolean;
+  catalogError?: string | null;
+  onRetryCatalog?: () => void;
+  onCatalogPageChange?: (page: number) => void;
 }
 
 export const CatalogPage: React.FC<CatalogPageProps> = ({
@@ -78,10 +84,22 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   onNavigate,
   onSelectProduct,
   onRequestProduct,
+  remoteCatalog = false,
+  catalogPagination,
+  catalogIsLoading = false,
+  catalogError = null,
+  onRetryCatalog,
+  onCatalogPageChange,
 }) => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [localCurrentPage, setLocalCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const currentPage = remoteCatalog ? (catalogPagination?.page ?? 1) : localCurrentPage;
+  const setCurrentPage = (next: React.SetStateAction<number>) => {
+    const nextPage = typeof next === 'function' ? next(currentPage) : next;
+    if (remoteCatalog) onCatalogPageChange?.(nextPage);
+    else setLocalCurrentPage(nextPage);
+  };
 
   const activeCategories = categories.filter((c) => c.isActive !== false);
   const topCategories = activeCategories.filter((c) => !c.parentId);
@@ -126,15 +144,38 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     nowMs
   );
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredProducts.length / itemsPerPage)
-  );
+  const totalPages = remoteCatalog
+    ? Math.max(1, catalogPagination?.totalPages ?? 1)
+    : Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedProducts = filteredProducts.slice(
-    (safePage - 1) * itemsPerPage,
-    safePage * itemsPerPage
-  );
+  const paginatedProducts = remoteCatalog
+    ? filteredProducts
+    : filteredProducts.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
+  const hasSearchQuery = Boolean(filters.searchQuery.trim());
+  const hasCategoryScope =
+    filters.categoryId !== 'ALL' || filters.subcategoryId !== 'ALL';
+  const emptyTitle = hasSearchQuery
+    ? lang === 'ar'
+      ? 'لا توجد منتجات تطابق بحثك'
+      : 'No Products Match Your Search'
+    : hasCategoryScope
+      ? lang === 'ar'
+        ? 'لا توجد منتجات متاحة في هذه الفئة حالياً'
+        : 'No Products Are Available in This Category Yet'
+      : lang === 'ar'
+        ? 'لا توجد منتجات تطابق الفلاتر المحددة'
+        : 'No Products Match Your Active Filters';
+  const emptyDescription = hasSearchQuery
+    ? lang === 'ar'
+      ? 'جرّب كلمة بحث أخرى أو أزل بعض الفلاتر.'
+      : 'Try another search term or remove one of the active filters.'
+    : hasCategoryScope
+      ? lang === 'ar'
+        ? 'جرّب فئة أخرى أو أزل الفلاتر للاطلاع على كامل الكتالوج.'
+        : 'Try another category, or clear filters to browse the full catalog.'
+      : lang === 'ar'
+        ? 'جرّب توسيع نطاق السعر أو إزالة بعض فلاتر العلامات التجارية.'
+        : 'Try adjusting the USD price range or clearing brand filters.';
 
   // Latest 4 products for the compact sidebar panel
   const latestSidebarProducts = [...products]
@@ -1194,37 +1235,66 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
           )}
 
           {/* Dense Product Grid or Empty Search State */}
+          {catalogError && paginatedProducts.length > 0 && (
+            <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              <span>{catalogError}</span>
+              {onRetryCatalog && (
+                <button
+                  type="button"
+                  onClick={onRetryCatalog}
+                  className="shrink-0 font-bold text-rose-800 underline underline-offset-2 hover:text-rose-950"
+                >
+                  {lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                </button>
+              )}
+            </div>
+          )}
+          {catalogIsLoading && (
+            <div aria-live="polite" role="status" className="mb-3 text-xs font-medium text-slate-500">
+              {lang === 'ar' ? 'جارٍ تحديث المنتجات…' : 'Updating products…'}
+            </div>
+          )}
           {paginatedProducts.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200/90 p-10 text-center space-y-4">
+            <div
+              className="bg-white rounded-xl border border-slate-200/90 p-10 text-center space-y-4"
+              role={catalogError ? 'alert' : undefined}
+            >
               <div className="w-12 h-12 rounded-full bg-[#F4F3F7] text-[#8E4DEB] mx-auto flex items-center justify-center">
                 <Search className="w-6 h-6" />
               </div>
               <div className="space-y-1">
                 <h2 className="text-base font-bold text-[#111318]">
-                  {lang === 'ar'
-                    ? 'لم يتم العثور على منتجات مطابقة للفلاتر المحددة'
-                    : 'No Products Match Your Active Filters'}
+                  {catalogError
+                    ? lang === 'ar'
+                      ? 'تعذر تحديث الكتالوج'
+                      : 'We Could Not Refresh the Catalog'
+                    : emptyTitle}
                 </h2>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  {lang === 'ar'
-                    ? 'جرب توسيع نطاق السعر أو إزالة بعض فلاتر العلامات التجارية أو البحث بكلمة أخرى.'
-                    : 'Try adjusting your USD price range, clearing use-case tags, or searching for another model.'}
+                  {catalogError ?? emptyDescription}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={onResetFilters}
+                onClick={catalogError ? onRetryCatalog : onResetFilters}
                 className="px-5 py-2.5 rounded-lg bg-[#8E4DEB] hover:bg-[#7A38D8] text-white text-xs font-bold transition-colors"
               >
-                {lang === 'ar'
-                  ? 'إعادة ضبط جميع الفلاتر'
-                  : 'Reset All Filters'}
+                {catalogError
+                  ? lang === 'ar'
+                    ? 'إعادة المحاولة'
+                    : 'Retry'
+                  : lang === 'ar'
+                    ? 'إعادة ضبط جميع الفلاتر'
+                    : 'Reset All Filters'}
               </button>
             </div>
           ) : (
             <div
               data-testid="catalog-product-grid"
-              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3.5"
+              aria-busy={catalogIsLoading}
+              className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3.5 transition-opacity ${
+                catalogIsLoading ? 'opacity-70' : 'opacity-100'
+              }`}
             >
               {paginatedProducts.map((prod) => (
                 <ProductCard

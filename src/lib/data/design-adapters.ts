@@ -158,6 +158,20 @@ function orderedUrls(images: Array<{ url: string; sortOrder: number }>, maximum?
   return maximum === undefined ? urls : urls.slice(0, maximum);
 }
 
+/**
+ * Product media has not been uploaded for the baseline catalog. These are
+ * existing local illustration families, used only as decorative fallbacks —
+ * never as a claim that an image record exists for the product.
+ */
+function productPlaceholderVisualKey(record: ProductRecord) {
+  const category = (record.category.parent?.slug ?? record.category.slug).toLowerCase();
+  if (category.includes('laptop')) return 'cat-laptops';
+  if (category.includes('audio') || category.includes('headset')) return 'audio-earbuds-front';
+  if (category.includes('accessor') || category.includes('keyboard') || category.includes('mouse')) return 'cat-accessories';
+  if (category.includes('build') || category.includes('gaming')) return 'build-nebula-front';
+  return 'cat-components';
+}
+
 function mapSpecifications(value: unknown): GenericSpec[] {
   if (!Array.isArray(value)) return [];
 
@@ -194,7 +208,7 @@ function mapWorkflowTitles(value: unknown): BilingualText[] {
 
 export function mapProduct(record: ProductRecord): Product {
   const galleryImages = orderedUrls(record.images, 5);
-  const primaryImage = galleryImages[0] ?? '';
+  const primaryImage = galleryImages[0] ?? productPlaceholderVisualKey(record);
 
   return {
     id: record.id,
@@ -318,6 +332,12 @@ export function mapHomepageBanners(records: HomepageBannerRecord[]) {
 export function mapStoreService(record: StoreServiceRecord): StoreService {
   const galleryImages = orderedUrls(record.images, 5);
   const subtitle = bilingual(record.shortDescriptionAr, record.shortDescriptionEn);
+  const slug = record.slug.toLowerCase();
+  const iconKey = slug.includes('cool')
+    ? 'cooling'
+    : slug.includes('camera') || slug.includes('surveillance')
+      ? 'cameras'
+      : 'maintenance';
   return {
     id: record.id,
     slug: record.slug,
@@ -331,7 +351,7 @@ export function mapStoreService(record: StoreServiceRecord): StoreService {
     highlights: mapHighlights(record.highlights),
     checklist: mapWorkflowTitles(record.workflowSteps),
     turnaroundNote: emptyBilingual,
-    iconKey: '',
+    iconKey,
     isActive: record.isActive,
     isFeatured: record.isFeatured,
     sortOrder: record.sortOrder,

@@ -61,6 +61,7 @@ interface HomePageProps {
   offers: Offer[];
   heroSlides?: HeroSlide[];
   promoBanners?: PromoBanner[];
+  allowPromoFallback?: boolean;
   settings: StoreSettings;
   nowMs: number;
   onNavigate: (
@@ -81,6 +82,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   offers,
   heroSlides: propHeroSlides,
   promoBanners: propPromoBanners,
+  allowPromoFallback = true,
   settings,
   nowMs,
   onNavigate,
@@ -112,7 +114,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   const activePromoBanners = (
     propPromoBanners && propPromoBanners.length > 0
       ? propPromoBanners
-      : INITIAL_PROMO_BANNERS
+      : allowPromoFallback
+        ? INITIAL_PROMO_BANNERS
+        : []
   )
     .filter((b) => b.isActive !== false)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -121,7 +125,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   const sideBanners =
     activePromoBanners.length > 0
       ? activePromoBanners
-      : INITIAL_PROMO_BANNERS.slice(0, 2);
+      : allowPromoFallback
+        ? INITIAL_PROMO_BANNERS.slice(0, 2)
+        : [];
   // Hero slides and side promo banners are driven by StoreContext (INITIAL_HERO_SLIDES / INITIAL_PROMO_BANNERS)
 
   // Respect prefers-reduced-motion media query

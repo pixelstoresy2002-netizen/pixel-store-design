@@ -19,9 +19,15 @@ export interface ProductListQueryInput {
   categorySlug?: string;
   subcategorySlug?: string;
   brandSlug?: string;
+  brandSlugs?: string[];
   useCaseSlug?: string;
   condition?: 'NEW' | 'USED';
+  conditions?: Array<'NEW' | 'USED'>;
   availability?: 'IN_STOCK' | 'OUT_OF_STOCK' | 'ON_REQUEST';
+  availabilities?: Array<'IN_STOCK' | 'OUT_OF_STOCK' | 'ON_REQUEST'>;
+  minPriceUsdCents?: number;
+  maxPriceUsdCents?: number;
+  onlyOffers?: boolean;
   bestSeller?: boolean;
   newArrival?: boolean;
   featured?: boolean;
@@ -37,9 +43,15 @@ export interface NormalizedProductListQuery {
   categorySlug?: string;
   subcategorySlug?: string;
   brandSlug?: string;
+  brandSlugs: string[];
   useCaseSlug?: string;
   condition?: 'NEW' | 'USED';
+  conditions: Array<'NEW' | 'USED'>;
   availability?: 'IN_STOCK' | 'OUT_OF_STOCK' | 'ON_REQUEST';
+  availabilities: Array<'IN_STOCK' | 'OUT_OF_STOCK' | 'ON_REQUEST'>;
+  minPriceUsdCents?: number;
+  maxPriceUsdCents?: number;
+  onlyOffers?: boolean;
   bestSeller?: boolean;
   newArrival?: boolean;
   featured?: boolean;
@@ -72,6 +84,18 @@ const PRODUCT_SORTS = new Set<ProductListSort>([
 ]);
 const CONDITIONS = new Set(['NEW', 'USED']);
 const AVAILABILITIES = new Set(['IN_STOCK', 'OUT_OF_STOCK', 'ON_REQUEST']);
+
+function normalizedIdentifiers(values: string[] | undefined) {
+  return [...new Set((values ?? []).map(normalizeIdentifier).filter((value): value is string => Boolean(value)))];
+}
+
+function normalizedValues<T extends string>(values: T[] | undefined, allowed: Set<string>) {
+  return [...new Set((values ?? []).filter((value): value is T => allowed.has(value)))];
+}
+
+function nonnegativeSafeInteger(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value : undefined;
+}
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number) {
   if (!Number.isFinite(value)) return fallback;
@@ -112,6 +136,11 @@ export function normalizeProductListQuery(
   const availability = AVAILABILITIES.has(input.availability ?? '')
     ? input.availability
     : undefined;
+  const brandSlugs = normalizedIdentifiers(input.brandSlugs);
+  const conditions = normalizedValues(input.conditions, CONDITIONS);
+  const availabilities = normalizedValues(input.availabilities, AVAILABILITIES);
+  const minPriceUsdCents = nonnegativeSafeInteger(input.minPriceUsdCents);
+  const maxPriceUsdCents = nonnegativeSafeInteger(input.maxPriceUsdCents);
 
   return {
     ...base,
@@ -119,9 +148,15 @@ export function normalizeProductListQuery(
     categorySlug: normalizeIdentifier(input.categorySlug),
     subcategorySlug: normalizeIdentifier(input.subcategorySlug),
     brandSlug: normalizeIdentifier(input.brandSlug),
+    brandSlugs,
     useCaseSlug: normalizeIdentifier(input.useCaseSlug),
     condition,
+    conditions,
     availability,
+    availabilities,
+    ...(minPriceUsdCents !== undefined ? { minPriceUsdCents } : {}),
+    ...(maxPriceUsdCents !== undefined ? { maxPriceUsdCents } : {}),
+    onlyOffers: typeof input.onlyOffers === 'boolean' ? input.onlyOffers : undefined,
     bestSeller: typeof input.bestSeller === 'boolean' ? input.bestSeller : undefined,
     newArrival: typeof input.newArrival === 'boolean' ? input.newArrival : undefined,
     featured: typeof input.featured === 'boolean' ? input.featured : undefined,

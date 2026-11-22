@@ -78,7 +78,7 @@ export const ProductGalleryStage: React.FC<ProductGalleryStageProps> = ({
   productName,
   showCounterBadge = true,
 }) => {
-  const safeImages = images.length > 0 ? images : ['laptop-rog-front'];
+  const safeImages = images;
   const safeIndex =
     activeIndex >= 0 && activeIndex < safeImages.length ? activeIndex : 0;
 
@@ -90,7 +90,17 @@ export const ProductGalleryStage: React.FC<ProductGalleryStageProps> = ({
       data-hovering={isHovering ? 'true' : 'false'}
       className="relative w-full h-full overflow-hidden"
     >
-      {safeImages.map((visualKey, idx) => {
+      {safeImages.length === 0 ? (
+        <div
+          className="relative flex h-full w-full items-center justify-center bg-gradient-to-b from-[#FAF9FC] to-[#ECEAF2] text-slate-400"
+          role="img"
+          aria-label={`${productName} — product image unavailable`}
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-lg" aria-hidden="true">
+            ···
+          </div>
+        </div>
+      ) : safeImages.map((visualKey, idx) => {
         const isActive = idx === safeIndex;
         return (
           <div

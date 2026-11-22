@@ -17,6 +17,7 @@ export default function HomeRoutePage() {
     promoBanners,
     settings,
     effectiveNowMs,
+    isMockMode,
     handleNavigate,
     handleSelectProduct,
     setRequestModalProduct,
@@ -33,6 +34,7 @@ export default function HomeRoutePage() {
         offers={offers}
         heroSlides={heroSlides}
         promoBanners={promoBanners}
+        allowPromoFallback={isMockMode}
         settings={settings}
         nowMs={effectiveNowMs}
         onNavigate={handleNavigate}
